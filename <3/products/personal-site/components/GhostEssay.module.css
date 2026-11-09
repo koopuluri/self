@@ -1,0 +1,49 @@
+.page {
+  max-width: var(--page-width);
+  margin: 0 auto;
+  padding: var(--page-top) var(--page-gutter) var(--page-bottom);
+  overflow-wrap: break-word;
+}
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-related);
+}
+.body > * { margin-block: 0; }
+.body :is(h1, h2, h3, h4, h5, h6) {
+  font-weight: 560;
+  color: var(--ink-strong);
+}
+/* The shared 16px gap plus 16px margin gives every divider 32px per side. */
+.body hr { margin: calc(var(--space-section) - var(--space-related)) 0; border: 0; border-top: 1px solid var(--hairline); }
+.body ul, .body ol { padding: 0 0 0 1.25rem; }
+.body ul { list-style: disc; }
+.body ol { list-style: decimal; }
+.body ol > li::marker { content: counter(list-item) ") "; }
+.body li { padding-left: 0.75rem; }
+.body li::marker { color: var(--caption); }
+.body li + li { margin-top: var(--space-detail); }
+.body blockquote {
+  margin: 0;
+  border-left: 2px solid var(--hairline);
+  padding-left: 1rem;
+  color: var(--accent);
+}
+.body img { max-width: 100%; height: auto; }
+/* Text has space inside its line box; give media edges the same optical space. */
+.body > p:has(> video) {
+  padding-block: var(--space-media-edge);
+}
+.video {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: auto 1 / 1;
+}
+.body pre { overflow-x: auto; padding: 1rem; background: var(--code-bg); }
+.files { list-style: none; padding: 0; margin: 0; }
+.files li { margin: 0; padding: 0; }
+.breadcrumb { margin: 0 0 var(--space-section); color: var(--caption); }
+.body { min-width: 0; }
+.body table { display: block; max-width: 100%; overflow-x: auto; }
+.body audio { max-width: 100%; }

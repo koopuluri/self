@@ -1,6 +1,6 @@
 # Show the workspace; skip dependencies and generated site files.
 **/node_modules/
 **/.next/
-/expression/personal-site/out/
-/expression/personal-site/build/
-/expression/personal-site/coverage/
+/<3/products/personal-site/out/
+/<3/products/personal-site/build/
+/<3/products/personal-site/coverage/

@@ -1,6 +1,6 @@
 ---
 name: organize
-description: Organize Ghost's repository to match its documented structure, moving loose media into assets and personal writing into expression while preserving content and repairing references. Use when asked to organize or clean up Ghost, and before preparing a Ghost publication.
+description: Organize the self personal-stack workspace (formerly Ghost), preserving source records and repairing links. Use for workspace cleanup, reorganization, and publication preparation.
 ---
 
 # Organize Ghost
@@ -9,27 +9,25 @@ Resolve Ghost's root from this skill's location (`../../..`). Read the mission i
 
 ## Find the right homes
 
-Inspect the working tree, including untracked root-level files, and identify misplaced artifacts by their contents and purpose rather than extension alone. Use the existing structure:
+Inspect the working tree, including untracked root-level files, and identify misplaced artifacts by their contents and purpose rather than extension alone. Use the personal stack structure in root `AGENTS.md`:
 
-- `expression/`: everything the user creates. Essays go in `expression/essays/`, video process docs in `expression/videos/`, and the site in `expression/personal-site/`. Loose notes can stay directly in `expression/`; create future categories such as products only when needed.
-- `events/`: records captured as the user does things. Conversations go in `events/chats/`, browsing captures in `events/browsing/`; preserve their source records and metadata.
-- `ghost-tools/`: supporting helpers and services.
-- `assets/`: shared images, audio, video, and other media.
-- `.agents/skills/`: reusable agent workflows.
+- `<3/`: notes, essays, videos, chats, browsing, taste, inbox, communication, products, and shared assets.
+- `π/`: personal model training, evaluation, versions, and serving.
+- `$/`: financial records and personal stock.
+- `tools/`: shared helpers. Product applications belong under `<3/products/`.
+- `.agents/skills/`: reusable workflows.
 
-Prefer existing destinations. Create a directory only when actual material warrants it, with a concise README explaining its role. Keep root orientation files, repository configuration, and files required at their current paths in place. Leave application state, credentials, dependencies, and build outputs in their established locations; cleanup is not deletion or a code refactor.
-
-Keep application-owned resources with their application, including explicitly public assets in `expression/personal-site/public/`. Do not sweep every media file into the private archive or migrate existing site essays as incidental cleanup. If a destination is ambiguous, complete the clear moves and report the remaining items for clarification.
+Loose notes go in `<3/notes/`. Preserve filenames, authorship and original media bytes. Use existing destinations; add deeper structure only when material warrants it. Keep app-owned resources with their app. Runtime state, credentials and generated output stay excluded. The workspace root README and section/directory READMEs are the site's source copy, so changes to them affect the site too.
 
 ## Move without losing context
 
-Preserve filenames where practical, file contents, user edits, annotations, and original media bytes. Never overwrite a destination or discard a file because its name matches another. Compare colliding files and choose a distinct destination when needed; do not introduce duplicate copies of an asset already stored in `assets/`.
+Preserve filenames where practical, file contents, user edits, annotations, and original media bytes. Never overwrite a destination or discard a file because its name matches another. Compare colliding files and choose a distinct destination when needed; do not introduce duplicate copies of an asset already stored in `<3/assets/`.
 
 Before moving files, locate their references and determine how those paths resolve. Repair incoming references and relative links inside moved documents, including Markdown links and images, Obsidian links and embeds, indexes, and active code or configuration paths. Preserve anchors, labels, and embed options. Change only the path portions needed for the move; do not rewrite historical transcript or quotation text. If a historical path must remain literal, preserve it and put any navigation aid outside the source record in a `> π:` callout.
 
 Keep original titles and wording intact. Do not process notebook images, rewrite notes, summarize transcripts, or add editorial prose as a side effect. Any necessary new editorial annotation uses `> π:`.
 
-Check publication dependencies when moving files consumed by the site: update affected imports or content references and `ghost.publish.json`'s `site.inputs` before a release plan is prepared. Preserve private-media exclusions. Let the publisher maintain `assets/manifest.json`; do not delete historical archive entries or alter remote objects during organization.
+Check publication dependencies when moving files consumed by the site: update affected imports or content references and `ghost.publish.json`'s `site.inputs` before a release plan is prepared. Preserve Git exclusions for large media and credentials. Public media serving is conditional on the separately configured capped gateway; do not change R2 settings during organization. Let the publisher maintain `<3/assets/manifest.json`; do not delete historical archive entries or alter remote objects during organization.
 
 ## Verify and finish
 

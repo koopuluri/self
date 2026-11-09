@@ -11,7 +11,7 @@ Turn a document containing notebook images into a readable arrangement of the us
 
 - Identify the intended document from the user's reference or available document context. Inspect its existing text and all embedded images; preserve its filename, existing user edits, and unrelated material. If several documents fit and context cannot distinguish them, ask which one.
 - Work in that document. Merely dropping images into a file is not a background trigger; a request such as "process notes" invokes this workflow.
-- Keep original images in `assets/`, preserving original filenames where practical. Resolve name collisions without overwriting other media, and repair affected references when moving files.
+- Keep original images in `<3/assets/`, preserving original filenames where practical. Resolve name collisions without overwriting other media, and repair affected references when moving files.
 - If a format such as HEIC/HEIF cannot be viewed or embedded reliably, convert it locally to PNG, retain the original, and embed the PNG. Prefer existing utilities such as `heif-convert` or `sips`; do not spend the task building an import pipeline. Inspect the converted images to confirm orientation and legibility. Crops or rotation for inspection must not replace the originals.
 
 ## Transcribe every image first

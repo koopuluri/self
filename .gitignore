@@ -22,10 +22,10 @@ __pycache__/
 *.pem
 *.key
 
-# Private media is restored using the tracked manifest, not Git.
-/assets/*
-!/assets/README.md
-!/assets/manifest.json
+# Media bytes live in R2; Git tracks their restoration manifest.
+/<3/assets/*
+!/<3/assets/README.md
+!/<3/assets/manifest.json
 /*.png
 /*.jpg
 /*.jpeg

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "git": {
-    "repository": "koopuluri/ghost",
+    "repository": "koopuluri/self",
     "remote": "origin",
     "branch": "main",
     "visibility": "public"
@@ -17,16 +17,24 @@
     "max_requests_per_run": 5000
   },
   "site": {
-    "directory": "expression/personal-site",
+    "directory": "<3/products/personal-site",
     "project": "karthikuppu.com",
     "scope": "homan-projects",
     "inputs": [
-      "expression/personal-site/**",
-      "expression/essays/design-principles.md",
-      "expression/essays/personal-stack.md"
+      "README.md",
+      "AGENTS.md",
+      "<3/**",
+      "π/**",
+      "$/**",
+      "tools/**",
+      ".agents/skills/**"
     ],
     "expected_url": "https://www.koopuluri.com",
     "account": "homan",
     "project_id": "prj_oQobkvUOSKGlPVgYlCIdvNLFYgtf"
+  },
+  "media": {
+    "public_origin": null,
+    "status": "private-archive"
   }
 }

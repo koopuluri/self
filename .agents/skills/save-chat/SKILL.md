@@ -5,9 +5,9 @@ description: Save or update a faithful conversation transcript in Ghost's chats 
 
 # Save chat
 
-Save original conversation messages as readable Markdown in `events/chats/`. Read `events/chats/README.md` and inspect an existing transcript for layout. Resolve Ghost's root from this skill's location (`../../..`), not an assumed working directory. Saving is separate from publishing or committing.
+Save original conversation messages as readable Markdown in `<3/chats/`. Read `<3/chats/README.md` and inspect an existing transcript for layout. Resolve Ghost's root from this skill's location (`../../..`), not an assumed working directory. Saving is separate from publishing or committing.
 
-A request to “save chat” invokes this skill even during a video workflow. Save the full original-message transcript in `events/chats/`; do not substitute a video process doc or its selective recorder. Process docs contain only selected creative discussion. Preserve their omissions and redactions while archiving the original conversation separately.
+A request to “save chat” invokes this skill even during a video workflow. Save the full original-message transcript in `<3/chats/`; do not substitute a video process doc or its selective recorder. Process docs contain only selected creative discussion. Preserve their omissions and redactions while archiving the original conversation separately.
 
 ## Retrieve the source
 
@@ -29,7 +29,7 @@ Record the model that generated each assistant response, including progress mess
 
 ## Write or extend
 
-For new transcripts use `events/chats/YYYY-MM-DD-short-title.md`, using the source conversation's date in the user's timezone when known. Preserve an existing filename on updates. Disambiguate collisions instead of overwriting another conversation.
+For new transcripts use `<3/chats/YYYY-MM-DD-short-title.md`, using the source conversation's date in the user's timezone when known. Preserve an existing filename on updates. Disambiguate collisions instead of overwriting another conversation.
 
 Include a header with source title, conversation ID and provider/app when available, dates/timezone, export time, source type, and coverage cutoff. Identify the last included message by ID, timestamp, or recognizable text. Distinguish export time from original timestamps; missing original timestamps stay unknown. State gaps and explain that exploratory proposals are historical, not necessarily endorsed decisions.
 
@@ -53,7 +53,7 @@ Before extending a transcript, inspect it and preserve earlier messages and anno
 
 Default to the last source message available at export time. Do not prewrite the eventual save-confirmation reply as though it were already in the source; a later save can include it.
 
-Add or update a concise transcript link in `events/chats/README.md`, preserving its conventions and existing entries.
+Add or update a concise transcript link in `<3/chats/README.md`, preserving its conventions and existing entries.
 
 ## Verify and report
 
