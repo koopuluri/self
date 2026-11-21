@@ -29,11 +29,28 @@ __pycache__/
 /*.png
 /*.jpg
 /*.jpeg
+/*.heic
+/*.heif
 /*.webp
 /*.gif
 /*.mp4
 /*.mov
 /*.mp3
+/*.m4a
 /*.wav
 /*.pdf
 /*.blend
+
+# Lens taste media is backed up only by the publication workflow.
+/<3/taste/**/*.png
+/<3/taste/**/*.m4a
+/<3/taste/.draft-*/
+
+# Local π execution state; durable memory remains ordinary workspace material.
+/π/.runtime/
+/π/threads/
+/π/logs/
+/π/chats/*.json
+
+# Local inbox polling cursors.
+/<3/inbox/state/

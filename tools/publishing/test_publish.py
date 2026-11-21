@@ -32,6 +32,21 @@ class PublicationTests(unittest.TestCase):
             p.prepare(self.root, 'bring ghost together')
         return p.read_json(self.root / '.ghost/publish-plan.json')
 
+    def test_lens_taste_media_archived_only_after_save(self):
+        folder = self.root / '<3/taste/capture/audio'
+        folder.mkdir(parents=True)
+        (folder / 'note.m4a').write_bytes(b'audio')
+        (folder.parent / 'screenshot.png').write_bytes(b'image')
+        (folder.parent / 'artifact.md').write_text('text record')
+        draft = self.root / '<3/taste/.draft-example'
+        draft.mkdir()
+        (draft / 'screenshot.png').write_bytes(b'unsaved')
+        files = p.assets(self.root)['files']
+        self.assertIn('<3/taste/capture/audio/note.m4a', files)
+        self.assertIn('<3/taste/capture/screenshot.png', files)
+        self.assertNotIn('<3/taste/capture/artifact.md', files)
+        self.assertNotIn('<3/taste/.draft-example/screenshot.png', files)
+
     def test_approval_is_bound_to_exact_source(self):
         plan = self.prepare()
         p.validate(self.root, plan)
@@ -105,6 +120,53 @@ class PublicationTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'exact prepared plan'):
             p.publish(self.root, 'different')
         self.assertIsNone(p.head(self.root))
+
+    def test_git_only_preserves_tracked_assets_without_reading_or_updating_media(self):
+        p.git('config', 'user.name', 'Test', cwd=self.root)
+        p.git('config', 'user.email', 'test@example.com', cwd=self.root)
+        manifest = self.root / '<3/assets/manifest.json'
+        manifest.write_text('{"original": true}\n')
+        p.git('add', '.', cwd=self.root)
+        p.git('commit', '-qm', 'initial', cwd=self.root)
+        manifest.write_text('{"local": true}\n')
+        (self.root / '<3/assets/new.png').write_bytes(b'local media')
+        with patch.object(p, 'assets', side_effect=AssertionError('media must not be scanned')), patch('builtins.print'):
+            p.prepare(self.root, 'move laptops', git_only=True)
+            plan = p.read_json(self.root / '.ghost/publish-plan.json')
+            p.validate(self.root, plan)
+            (self.root / '<3/assets/new.png').write_bytes(b'changed media')
+            p.validate(self.root, plan)
+        self.assertIsNone(plan['assets'])
+        self.assertEqual(p.git('show', plan['tree'] + ':<3/assets/manifest.json', cwd=self.root), '{"original": true}')
+        self.assertEqual(manifest.read_text(), '{"local": true}\n')
+        (self.root / 'note.md').write_text('new source')
+        with self.assertRaisesRegex(RuntimeError, 'files changed'):
+            p.validate(self.root, plan)
+
+    def test_git_only_publishes_to_local_remote_without_storage_or_deployment(self):
+        p.git('config', 'user.name', 'Test', cwd=self.root)
+        p.git('config', 'user.email', 'test@example.com', cwd=self.root)
+        self.config['git'] = {'remote': 'origin', 'branch': 'main'}
+        self.config['site']['directory'] = '<3/products/personal-site'
+        p.write_json(self.root / 'ghost.publish.json', self.config)
+        real_run = p.run
+        def local_run(*args, **kw):
+            if args[:2] == ('gh', 'auth'):
+                return subprocess.CompletedProcess(args, 0, b'', b'')
+            self.assertNotIn(args[0], {'vercel', 'npm'})
+            return real_run(*args, **kw)
+        with tempfile.TemporaryDirectory() as remote:
+            p.git('init', '--bare', remote, cwd=self.root)
+            p.git('remote', 'add', 'origin', remote, cwd=self.root)
+            with patch('builtins.print'), patch.object(p, 'Storage') as storage, patch.object(p, 'ensure_remote'), patch.object(p, 'run', side_effect=local_run):
+                p.prepare(self.root, 'move laptops', git_only=True)
+                plan = p.read_json(self.root / '.ghost/publish-plan.json')
+                p.publish(self.root, plan['id'])
+                storage.assert_not_called()
+            self.assertEqual(p.git('rev-parse', 'main', cwd=remote), p.head(self.root))
+            receipt = p.read_json(self.root / '.ghost' / ('release-' + plan['id'] + '.json'))
+            self.assertEqual(receipt['assets_uploaded'], 0)
+            self.assertEqual(receipt['site_status'], 'unchanged; git-only publication')
 
     def test_hard_cap_requirement_cannot_be_silently_downgraded(self):
         with self.assertRaisesRegex(RuntimeError, 'no verified'):

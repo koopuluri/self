@@ -1,9 +1,10 @@
 /* eslint-disable @next/next/no-img-element -- original media is served without image proxy costs */
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { canonicalPath, encodePath, inventory, mediaURL, readDocument, resolveLink } from "@/lib/workspace.mjs";
+import { canonicalPath, encodePath, inventory, mediaURL, readDocument } from "@/lib/workspace.mjs";
 import { WorkspaceMarkdown } from "./WorkspaceMarkdown";
 import { EssayHeading } from "./EssayHeading";
+import { SiteAnchor } from "./SiteAnchor";
 import styles from "./GhostEssay.module.css";
 
 export function DirectoryContent({ directory }: { directory: string }) {
@@ -11,20 +12,18 @@ export function DirectoryContent({ directory }: { directory: string }) {
   if (!directories.has(directory)) notFound();
   const source = directory + "/README.md";
   const doc = readDocument(source);
+  if (doc) return <WorkspaceMarkdown source={source} markdown={doc.markdown} />;
+
   const prefix = directory + "/";
   const children = [
     ...[...directories].filter(item => item.startsWith(prefix) && !item.slice(prefix.length).includes("/"))
       .map(item => ({ title: item.slice(prefix.length) + "/", href: encodePath(item) })),
-    ...[...files.keys()].filter(item => item.startsWith(prefix) && !item.slice(prefix.length).includes("/") && item !== source)
+    ...[...files.keys()].filter(item => item.startsWith(prefix) && !item.slice(prefix.length).includes("/"))
       .map(item => ({ title: readDocument(item)?.title ?? item.slice(prefix.length), href: canonicalPath(item) })),
   ].sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true }));
-  // Keep authored navigation and also expose children it does not mention.
-  const linked = new Set([...((doc?.markdown ?? "").matchAll(/\[[^\]]+\]\(([^)]+)\)/g))]
-    .map(match => resolveLink(source, match[1].replace(/^<|>$/g, ""))));
-  const unlisted = children.filter(child => !linked.has(child.href));
   return <>
-    {doc ? <WorkspaceMarkdown source={source} markdown={doc.markdown} /> : <h1>{directory.split("/").at(-1)}</h1>}
-    {unlisted.length > 0 && <ul className={styles.files} aria-label="directory contents">{unlisted.map(child => <li key={child.href}><Link href={child.href}>{child.title}</Link></li>)}</ul>}
+    <h1>{directory.split("/").at(-1)}</h1>
+    {children.length > 0 && <ul className={styles.files} aria-label="directory contents">{children.map(child => <li key={child.href}><Link href={child.href}>{child.title}</Link></li>)}</ul>}
   </>;
 }
 
@@ -40,7 +39,7 @@ export function WorkspacePage({ source, directory = false }: { source: string; d
       {/\.(png|jpe?g|webp|gif|svg)$/i.test(source) && <img src={url} alt={source.split("/").at(-1)} />}
       {/\.(mp4|webm|mov|m4v)$/i.test(source) && <video className={styles.video} src={url} controls playsInline preload="metadata" />}
       {/\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(source) && <audio src={url} controls preload="metadata" />}
-      <a href={url}>open original</a>
+      <SiteAnchor href={url}>open original</SiteAnchor>
     </div></main>;
   }
   const doc = readDocument(source);

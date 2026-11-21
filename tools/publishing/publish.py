@@ -17,7 +17,7 @@ import tempfile
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
-MEDIA = {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.mp4', '.mov', '.mp3', '.wav', '.pdf', '.blend'}
+MEDIA = {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.mp4', '.mov', '.mp3', '.m4a', '.wav', '.pdf', '.blend'}
 SECRET_PATTERNS = [
     rb'gh[pousr]_[A-Za-z0-9]{30,}',
     rb'github_pat_[A-Za-z0-9_]{30,}',
@@ -93,6 +93,9 @@ def assets(root):
     result = dict(previous)  # Missing local media can be restored; never silently delete history.
     paths = list((root / '<3/assets').rglob('*'))
     paths += [p for p in root.iterdir() if p.suffix.lower() in MEDIA]
+    paths += [p for p in (root / '<3/taste').rglob('*')
+              if p.suffix.lower() in MEDIA
+              and not any(part.startswith('.') for part in p.relative_to(root / '<3/taste').parts)]
     for p in sorted(paths):
         if p.name in {'README.md', 'manifest.json', '.DS_Store'} or not p.is_file():
             continue
@@ -113,7 +116,7 @@ def scan(paths):
         raise RuntimeError('credential patterns found; review these files without printing values: ' + ', '.join(problems))
 
 
-def snapshot(root):
+def snapshot(root, git_only=False):
     """Use an independent index; preparation never alters the user's staging area."""
     state = root / '.ghost'
     state.mkdir(exist_ok=True)
@@ -122,12 +125,14 @@ def snapshot(root):
     os.unlink(name)
     env = dict(os.environ, GIT_INDEX_FILE=name)
     try:
-        git('read-tree', '--empty', cwd=root, env=env)
+        base = head(root) if git_only else None
+        git('read-tree', base or '--empty', cwd=root, env=env)
+        paths = ['.', ':(exclude)<3/assets/**'] if git_only else ['.']
         # Check before writing any prospective source blobs to Git.
-        tracked = run('git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z', cwd=root).stdout
+        tracked = run('git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', *paths, cwd=root).stdout
         files = [inside(root, s.decode()) for s in tracked.split(b'\0') if s]
         scan([p for p in files if p.is_file()])
-        git('add', '-A', '.', cwd=root, env=env)
+        git('add', '-A', '--', *paths, cwd=root, env=env)
         tree = git('write-tree', cwd=root, env=env)
         entries = run('git', 'ls-tree', '-r', '-z', tree, cwd=root).stdout
         return tree, entries
@@ -152,30 +157,34 @@ def head(root):
     return p.stdout.decode().strip() if p.returncode == 0 else None
 
 
-def prepare(root, message):
+def prepare(root, message, git_only=False):
     if not message.strip() or message != message.lower() or '\n' in message or len(message) > 300:
         raise RuntimeError('use a short lowercase message, one or two informal sentences')
     config = read_json(root / 'ghost.publish.json')
-    manifest = assets(root)
-    write_json(root / '<3/assets/manifest.json', manifest)
-    tree, entries = snapshot(root)
+    manifest = None if git_only else assets(root)
+    if not git_only:
+        write_json(root / '<3/assets/manifest.json', manifest)
+    tree, entries = snapshot(root, git_only=git_only)
     fp = hashlib.sha256((fingerprint(entries, config['site']['inputs']) +
         json.dumps(config['site'], sort_keys=True)).encode()).hexdigest()
     plan = {'version': 1, 'base': head(root), 'tree': tree, 'message': message,
-            'site_fingerprint': fp, 'assets': manifest, 'config': config}
+            'site_fingerprint': fp, 'assets': manifest, 'config': config, 'git_only': git_only}
     plan['id'] = hashlib.sha256(json.dumps(plan, sort_keys=True).encode()).hexdigest()
     write_json(root / '.ghost/publish-plan.json', plan)
     previous = read_json(root / '.ghost/published-site.json', {})
     print(json.dumps({'plan': plan['id'], 'message': message,
-        'assets': len(manifest['files']), 'asset_bytes': sum(a['bytes'] for a in manifest['files'].values()),
-        'site_changed': previous.get('fingerprint') != fp,
-        'r2_enabled': config['assets']['enabled'], 'tree': tree}, indent=2))
+        'git_only': git_only,
+        'assets': len(manifest['files']) if manifest else 0,
+        'asset_bytes': sum(a['bytes'] for a in manifest['files'].values()) if manifest else 0,
+        'site_changed': not git_only and previous.get('fingerprint') != fp,
+        'r2_enabled': not git_only and config['assets']['enabled'], 'tree': tree}, indent=2))
 
 
 def validate(root, plan):
-    if assets(root) != plan['assets']:
+    git_only = plan.get('git_only', False)
+    if not git_only and assets(root) != plan['assets']:
         raise RuntimeError('media changed since preparation; prepare and approve a new snapshot')
-    tree, _ = snapshot(root)
+    tree, _ = snapshot(root, git_only=git_only)
     if tree != plan['tree']:
         raise RuntimeError('files changed since preparation; prepare and approve a new snapshot')
 
@@ -348,19 +357,21 @@ def publish(root, approval):
     if head(root) != expected_head:
         raise RuntimeError('Git history changed; prepare a new publication')
     config = plan['config']
-    if config.get('media', {}).get('status') == 'local-only-pending-cloudflare-setup':
+    git_only = plan.get('git_only', False)
+    if not git_only and config.get('media', {}).get('status') == 'local-only-pending-cloudflare-setup':
         raise RuntimeError('external setup is deferred: complete and verify the GitHub/media plan before publication')
-    require_storage(config['assets'])  # Fail before any publication, including Git.
+    if not git_only:
+        require_storage(config['assets'])  # Normal publication requires its archive backup.
     if git('branch', '--show-current', cwd=root) != config['git']['branch']:
         raise RuntimeError('current branch differs from the approved publishing branch')
     if not git('config', 'user.name', cwd=root) or not git('config', 'user.email', cwd=root):
         raise RuntimeError('configure your Git author name and email first')
     run('gh', 'auth', 'status', cwd=root)
-    storage = Storage(config['assets'])
+    storage = None if git_only else Storage(config['assets'])
     site = config['site']
     scope = ['--scope', site['scope']] if site.get('scope') else []
     previous = read_json(root / '.ghost/published-site.json', {})
-    site_changed = previous.get('fingerprint') != plan['site_fingerprint']
+    site_changed = not git_only and previous.get('fingerprint') != plan['site_fingerprint']
     site_path = inside(root, site['directory'])
     if site_changed and not journal.get('site_url'):
         # Link/pull configure local state; neither deploys nor changes the live site.
@@ -372,7 +383,7 @@ def publish(root, approval):
         run('npm', 'ci', '--no-fund', '--no-audit', cwd=site_path)
         run('vercel', 'build', '--prod', cwd=site_path)
         validate(root, plan)
-    journal['assets_uploaded'] = storage.upload(root, plan['assets'])
+    journal['assets_uploaded'] = 0 if git_only else storage.upload(root, plan['assets'])
     write_json(state_path, journal)
     validate(root, plan)
     ensure_remote(root, config['git'])
@@ -380,7 +391,11 @@ def publish(root, approval):
         if plan['base'] and git('rev-parse', 'HEAD^{tree}', cwd=root) == plan['tree']:
             journal['commit'] = plan['base']
         else:
-            git('add', '-A', '.', cwd=root)
+            if git_only:
+                # Carry forward excluded assets exactly as they were in HEAD.
+                git('read-tree', plan['tree'], cwd=root)
+            else:
+                git('add', '-A', '.', cwd=root)
             if git('write-tree', cwd=root) != plan['tree']:
                 raise RuntimeError('staged snapshot changed; stopping before commit')
             git('commit', '-m', plan['message'], cwd=root)
@@ -400,11 +415,11 @@ def publish(root, approval):
             raise RuntimeError('deployment result ambiguous; inspect Vercel before retrying')
         journal['site_url'] = urls[-1]
         write_json(state_path, journal)
-    if journal.get('site_url'):
+    if not git_only and journal.get('site_url'):
         run('vercel', 'inspect', journal['site_url'], '--wait', *scope, cwd=site_path)
         write_json(root / '.ghost/published-site.json', {'fingerprint': plan['site_fingerprint'],
             'commit': journal['commit'], 'url': journal['site_url']})
-    journal['site_status'] = 'deployed' if journal.get('site_url') else 'unchanged; skipped'
+    journal['site_status'] = 'unchanged; git-only publication' if git_only else 'deployed' if journal.get('site_url') else 'unchanged; skipped'
     journal['complete'] = True
     journal['finished_at'] = dt.datetime.now(dt.timezone.utc).isoformat()
     write_json(state_path, journal)
@@ -414,14 +429,16 @@ def publish(root, approval):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
-    sub.add_parser('prepare').add_argument('--message', required=True)
+    preparation = sub.add_parser('prepare')
+    preparation.add_argument('--message', required=True)
+    preparation.add_argument('--git-only', action='store_true', help='push source only; leave assets and the site untouched')
     sub.add_parser('publish').add_argument('--approved-plan', required=True)
     sub.add_parser('restore')
     args = parser.parse_args()
     try:
-        if args.command != 'prepare':
+        if args.command == 'restore' or (args.command == 'publish' and not read_json(ROOT / '.ghost/publish-plan.json', {}).get('git_only')):
             load_credentials(ROOT)
-        if args.command == 'prepare': prepare(ROOT, args.message)
+        if args.command == 'prepare': prepare(ROOT, args.message, git_only=args.git_only)
         elif args.command == 'publish':
             # A second publisher must not race commits, uploads, or release receipts.
             import fcntl

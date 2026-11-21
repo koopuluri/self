@@ -3,7 +3,7 @@
 self is the personal stack: personhood (`<3/`), personal artificial intelligence (`π/`), and personal stock (`$/`). Keep its record useful for π now and later, and documentation concise.
 
 - `<3/`: notes, essays, videos, chats, browsing, taste, inbox, communication, products, and assets. Create deeper structure as actual material warrants it.
-- `π/`: versioned personal models, training, evaluation, and serving. Source records keep their homes elsewhere in self.
+- `π/`: the entire personal AI system: memory, ongoing threads, new stream-app chats, models, training, evaluation, and serving. Existing source records keep their homes. Local execution logs, credentials, caches, and session state stay excluded from publication.
 - `$/`: financial records and personal stock.
 - `tools/`: supporting helpers shared across the stack.
 - `.agents/skills/`: reusable workflows.

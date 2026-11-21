@@ -6,7 +6,7 @@ One workflow publishes the complete source collection to GitHub, backs up media 
 
 Ask π to **publish ghost**. The [skill](../../.agents/skills/publish-ghost/SKILL.md) inspects changes, prepares a snapshot and message, waits for message approval, and executes that exact plan. A changed source file, asset, destination, or publishing configuration invalidates the plan. No commit, GitHub push, asset upload, or site deployment precedes approval.
 
-The implementation lives here; configuration is in `../../ghost.publish.json`. `<3/assets/manifest.json` records local filenames, sizes, checksums, and private immutable object keys. It contains no access credentials or public media URLs. The archive includes assets and loose root-level media without moving or rewriting the originals. A missing local file retains its manifest entry for restoration; removing archived objects is a separate explicit operation.
+The implementation lives here; configuration is in `../../ghost.publish.json`. `<3/assets/manifest.json` records local filenames, sizes, checksums, and private immutable object keys. It contains no access credentials or public media URLs. The archive includes assets, completed lens taste screenshots/audio, and loose root-level media without moving or rewriting the originals. A missing local file retains its manifest entry for restoration; removing archived objects is a separate explicit operation.
 
 ```sh
 python3 tools/publishing/publish.py prepare --message 'bring the site and tools into ghost'
@@ -17,6 +17,8 @@ tools/publishing/.venv/bin/python tools/publishing/publish.py restore
 ```
 
 Preparation uses an isolated Git index, leaves the user's staging untouched, and never commits. The plan and resumable receipts live in ignored `.ghost/`. Publish validates the plan, builds changed site inputs, verifies bucket privacy, uploads missing immutable objects, commits and pushes, then deploys. Concurrent publishers on this machine are excluded. Pushes never force-update remote history. An ambiguous deployment stops for inspection instead of blindly retrying.
+
+For a source-only laptop handoff, add `--git-only` to `prepare`. This mode is part of the approved plan: it excludes changes under `<3/assets/`, preserves already tracked asset metadata from HEAD, and skips asset scanning, manifest updates, R2 credentials/uploads, and all site deployment steps. Ordinary Git exclusions still apply to credentials, local runtime state, media bytes, dependencies, and builds. Execute the approved plan with the same `publish --approved-plan PLAN_ID` command.
 
 ## setup
 

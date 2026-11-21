@@ -9,7 +9,7 @@ page is the spacing reference for the whole site.
 
 Three top-level pages share a centered profile header, then a divider, an icon-only
 segmented navigation row, another divider, and the selected section content:
-- heart: personhood, the default homepage at `/`; section title: `expressions` (browser title remains `karthik uppuluri`).
+- heart: personhood, the default homepage at `/`; section title comes from `<3/README.md` (browser title remains `karthik uppuluri`).
 - π: `/π`; visible heading: `personal artificial intelligence`; browser title: `π`.
   Redirect the old `/ai` URL.
 - $: `/$`; visible heading: `personal stock`; browser title: `$`.
@@ -29,9 +29,9 @@ still to be designed.
 On all three top-level pages, center the 48px circular profile photo above
 `karthik uppuluri (x)`, with only the x linked to the profile on X in a new tab. No visible bio.
 Use the root README for the displayed name, image and X URL; content/profile.json retains historical metadata.
-The heart README starts with `expressions` and the existing essay links, followed by directory navigation. No cards.
+Use the heart README for the heading, essay links and other section content. No cards.
 
-The site follows the current self directory. Root README supplies the shared intro; directory READMEs supply landing copy. Personhood opens by default at `/` and is also available at `/<3`. All workspace essays have root slugs. Other documents use their workspace paths, without the `.md` suffix. Each directory displays its README and an automatic list of children not already linked there. New source files do not require a publication allowlist.
+The site follows the current self directory. Root README supplies the shared intro. Personhood opens by default at `/` and is also available at `/<3`. All workspace essays have root slugs. Other documents use their workspace paths, without the `.md` suffix. Directory landing pages with a README render its content. Directories without a README list their immediate children. New source files do not require a publication allowlist.
 
 Media is public in policy, with local-only preview until a capped Cloudflare Worker is configured. Keep the R2 bucket itself private. Source review and exact-message release approval remain required.
 
@@ -41,6 +41,8 @@ Site-authored labels and metadata are lowercase, informal and relaxed. Preserve
 essay source text exactly, including its capitalization, formatting and π notes.
 No CSS lowercase transformation. New editorial annotations to the user's material
 must be Markdown blockquotes starting with `> π:`.
+
+External web links open in a new tab. Links within the site open in the current tab.
 
 Match [benji.org](https://benji.org/)'s restrained typography, colors and layout.
 Measured from its CSS and computed desktop/mobile styles on November 3, 2026:

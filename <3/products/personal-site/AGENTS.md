@@ -6,7 +6,7 @@ The site is a public reflection of self. Use `lib/workspace.mjs` as the path/cat
 
 The three top-level sections share the root README introduction and icon navigation. `/` opens personhood; `/<3` also resolves to it. `/π` and `/$` read their section READMEs. Nested documents use InternalPage. Preserve typography, spacing, SVG icon geometry, section animation, essay headings and historical routes. Quote dates and render them verbatim.
 
-Only intentional workspace roots are cataloged. Do not traverse symlinks, credentials, runtime state, dependencies, caches or generated builds. Markdown renders without executing MDX. Links and Obsidian embeds resolve from their source location. Local media is served only in development. Production media requires the separately configured capped gateway; never expose the archive directly as a fallback.
+Only intentional workspace roots are cataloged. Do not traverse symlinks, credentials, runtime state, dependencies, caches or generated builds. Markdown renders without executing MDX. Links and Obsidian embeds resolve from their source location. Use `SiteAnchor` for links that may lead off-site. Local media is served only in development. Production media requires the separately configured capped gateway; never expose the archive directly as a fallback.
 
 Run npm run check:content, npm run test:workspace, and npm run build; preview desktop/mobile, keyboard navigation, source text, links and media. Keep publication separate and use the root publish skill with exact-message approval.
 

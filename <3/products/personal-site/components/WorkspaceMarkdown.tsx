@@ -1,6 +1,7 @@
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { inventory, mediaURL, prepareMarkdown, resolveLink } from "@/lib/workspace.mjs";
+import { SiteAnchor } from "./SiteAnchor";
 import styles from "./GhostEssay.module.css";
 
 export function WorkspaceMarkdown({ source, markdown, className }: { source: string; markdown: string; className?: string }) {
@@ -9,7 +10,7 @@ export function WorkspaceMarkdown({ source, markdown, className }: { source: str
       const url = resolveLink(source, href ?? "");
       if (title === "video") return <video className={styles.video} src={url} controls playsInline preload="metadata" aria-label={typeof children === "string" ? children : "video"} />;
       if (title === "audio") return <audio src={url} controls preload="metadata" aria-label={typeof children === "string" ? children : "audio"} />;
-      return <a href={url} title={title} target={source === "README.md" && /^https?:/.test(url) ? "_blank" : undefined} rel={source === "README.md" ? "noopener noreferrer" : undefined}>{children}</a>;
+      return <SiteAnchor href={url} title={title}>{children}</SiteAnchor>;
     },
     img({ src, alt }) {
       let url = typeof src === "string" ? resolveLink(source, src) : "";

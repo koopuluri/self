@@ -6,7 +6,7 @@ The public reflection of [self](../../../README.md), built from its original fil
 
 - Root `README.md` is the shared introduction above the section navigation.
 - `<3/README.md`, `π/README.md`, and `$/README.md` supply the three sections. `/` opens personhood; `/<3` is also available.
-- Directory READMEs supply their landing pages. Each page also lists children not already linked by its README.
+- Directory landing pages with a README render its content. Directories without a README list their immediate children.
 - `<3/essays/NAME.md` renders at `/NAME`. Other Markdown uses its repository path without `.md`; source files keep their extension.
 - Markdown links and Obsidian links/embeds resolve relative to the original document. Author text and historical transcripts stay intact.
 - `lib/workspace.mjs` defines the public catalog. Hidden runtime state, credentials, dependencies, builds and symlinks are excluded. `.agents/skills` is intentional public documentation.
