@@ -31,3 +31,40 @@ throughout this stream i've been expressing principles. compile and present them
 > 14. redact; don’t falsify. withholding something is different from making it appear that something else happened. don’t change even a timestamp to make the story read better. (979)
 > 15. make room for friendship and luck. spending time with people who care about the same work is part of practicing it, not a break from it. walking through the city, sharing an idea, or inviting a conversation gives someone a chance to find you. (568–570, 937–938)
 > 16. let money circulate toward people and ideas that can use it. beyond what you need to live, you describe money sitting idle as blood that isn’t circulating: its purpose is in what it enables. (538)
+
+**you**
+
+umm... ok let's actually create an artifact - actually i think we have an artifact, actually let's do this: propose principles to add to the principles artifact - but only use words that i have used, so no paraphrasing, no nothing. the numbered list you have above, generate a new one, but use only the words i have actually used in the beats
+
+
+> π: 1. “the goal is to express myself naturally. basically allow the mind to follow its natural movement.” (443)
+> 
+> 2. “you can observe your anger / sadness / whatever within yourself without reacting to it, without letting it hijack your mind. i can stream then.” (594) “i must be conscious, balanced, aware, attentive when i stream.” (595)
+> 
+> 3. “there is nothing more valuable to me than my attention. nothing comes close.” (1421) “for responses to threads that i start or something, i really don't think i'd ever want the responses to be auto-injected into the stream.” (1420)
+> 
+> 4. “need to unify everything i do into a single experience, to have access to the data on how the mind moves between experiences.” (1372) “opening something up is never "going back" - it is alwys going forward because every single moment is new and is to be approached with a fresh mind.” (745)
+> 
+> 5. “bias toward less instruction. bias toward NO instructions.” (521) “all the connecting the dots is not my job. that is not the job of natural intelligence - that is the job of artificial intelligence.” (1228)
+> 
+> 6. “"i" should be my only bottleneck, not π, not the streaming app, or anyone else. just me.” (1440)
+> 
+> 7. “this entire workflow / system needs to be set up such that future ai's can retroactively go through the entire stream and find opportunities to do things in a better way and essentially create new threads for those tasks.” (1409)
+> 
+> 8. “do more difficult cognitive work the fresher the mind is, and less cognitively intense work the more tired the mind is.” (927) “if ai can't execute an idea today, it is better for me to wait until it can to ship it, than go down to the less complex level of executing on that idea. this is a good principle for how i operate. i think. makes sense for now at least, we'll see how this holds up.” (1410)
+> 
+> 9. “we should spend all of our time on what we believe to be the most valuable threads, and let go of the rest.” (1422)
+> 
+> 10. “structure must evolve after we have actual substance.” (1473) “focus on what you actually need and let the "system" or "model" emerge naturally from that. approach this like a practical builder, not a theorist.” (735)
+> 
+> 11. “the best way to shape this experience is to use it mindfully, and pay attention to my subtle emotional reactions to it, then decide whether to build for that reaction or to let the reaction itself go, and then act on that decision if it is to build.” (1422)
+> 
+> 12. “i will only optimize for actual value creation.” (554) “i will never optimize for virality etc. i will just express myself naturally and whatever happens happens.” (858)
+> 
+> 13. “i want to have some space betweeen expression and publishing - even for the things i want to publish, just so that we have some space to check for and enforce right speech.” (947) “what is noble speech / right speech? it is truthful, timely, useful, beneficial.” (593) “don't ship things just for the sake of shipping.” (1048)
+> 
+> 14. “the stream and metadata must be truthful. we must never NEVER fudge timestamps or anything. if we don't want to put some information out, we REDACT it. but we never manipulate it to fit into a narrative that we want.” (979)
+> 
+> 15. “walking the path and friendship on the path are two sides of the same coin.” (570) “you have to position yourself to get lucky. if you sit at home and just keep ideas to yourself and stay to yourself, you create no room for luck to operate.” (938)
+> 
+> 16. “money should never be hoarded. that money should always be in circulation toward people and ideas and whatever that are worthwhile, that are beneficiial.” (538)
