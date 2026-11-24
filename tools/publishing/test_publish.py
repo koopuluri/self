@@ -16,13 +16,13 @@ class PublicationTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         subprocess.run(['git', 'init', '-q', '-b', 'main', self.temp.name], check=True)
-        (self.root / '<3/assets').mkdir(parents=True)
-        (self.root / '<3/products/personal-site').mkdir(parents=True)
-        (self.root / '.gitignore').write_text('.ghost/\n<3/assets/*\n!<3/assets/manifest.json\n')
+        (self.root / '<3/stream/assets').mkdir(parents=True)
+        (self.root / '<3/artifacts/personal-site').mkdir(parents=True)
+        (self.root / '.gitignore').write_text('.ghost/\n<3/stream/assets/*\n!<3/stream/assets/manifest.json\n')
         self.config = {'assets': {'enabled': False, 'billing_policy': 'require_provider_hard_cap'},
-                       'site': {'inputs': ['<3/products/personal-site/**']}}
+                       'site': {'inputs': ['<3/artifacts/personal-site/**']}}
         p.write_json(self.root / 'ghost.publish.json', self.config)
-        (self.root / '<3/products/personal-site/index.js').write_text('hello')
+        (self.root / '<3/artifacts/personal-site/index.js').write_text('hello')
 
     def tearDown(self):
         self.temp.cleanup()
@@ -33,29 +33,29 @@ class PublicationTests(unittest.TestCase):
         return p.read_json(self.root / '.ghost/publish-plan.json')
 
     def test_lens_taste_media_archived_only_after_save(self):
-        folder = self.root / '<3/taste/capture/audio'
+        folder = self.root / '<3/stream/taste/capture/audio'
         folder.mkdir(parents=True)
         (folder / 'note.m4a').write_bytes(b'audio')
         (folder.parent / 'screenshot.png').write_bytes(b'image')
         (folder.parent / 'artifact.md').write_text('text record')
-        draft = self.root / '<3/taste/.draft-example'
+        draft = self.root / '<3/stream/taste/.draft-example'
         draft.mkdir()
         (draft / 'screenshot.png').write_bytes(b'unsaved')
         files = p.assets(self.root)['files']
-        self.assertIn('<3/taste/capture/audio/note.m4a', files)
-        self.assertIn('<3/taste/capture/screenshot.png', files)
-        self.assertNotIn('<3/taste/capture/artifact.md', files)
-        self.assertNotIn('<3/taste/.draft-example/screenshot.png', files)
+        self.assertIn('<3/stream/taste/capture/audio/note.m4a', files)
+        self.assertIn('<3/stream/taste/capture/screenshot.png', files)
+        self.assertNotIn('<3/stream/taste/capture/artifact.md', files)
+        self.assertNotIn('<3/stream/taste/.draft-example/screenshot.png', files)
 
     def test_approval_is_bound_to_exact_source(self):
         plan = self.prepare()
         p.validate(self.root, plan)
-        (self.root / '<3/products/personal-site/index.js').write_text('changed')
+        (self.root / '<3/artifacts/personal-site/index.js').write_text('changed')
         with self.assertRaisesRegex(RuntimeError, 'files changed'):
             p.validate(self.root, plan)
 
     def test_media_changes_invalidate_approval(self):
-        image = self.root / '<3/assets/image.png'
+        image = self.root / '<3/stream/assets/image.png'
         image.write_bytes(b'first')
         plan = self.prepare()
         image.write_bytes(b'second')
@@ -70,11 +70,10 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(first['site_fingerprint'], second['site_fingerprint'])
 
     def test_declared_essay_inputs_trigger_deployment(self):
-        self.config['site']['inputs'].append('<3/essays/essay.md')
+        self.config['site']['inputs'].append('<3/artifacts/essay.md')
         p.write_json(self.root / 'ghost.publish.json', self.config)
         first = self.prepare()
-        (self.root / '<3/essays').mkdir()
-        (self.root / '<3/essays/essay.md').write_text('essay')
+        (self.root / '<3/artifacts/essay.md').write_text('essay')
         second = self.prepare()
         self.assertNotEqual(first['site_fingerprint'], second['site_fingerprint'])
 
@@ -87,22 +86,22 @@ class PublicationTests(unittest.TestCase):
         self.assertIsNone(p.head(self.root))
 
     def test_private_media_is_not_in_git_tree(self):
-        (self.root / '<3/assets/image.png').write_bytes(b'private')
+        (self.root / '<3/stream/assets/image.png').write_bytes(b'private')
         plan = self.prepare()
         listing = p.git('ls-tree', '-r', '--name-only', plan['tree'], cwd=self.root)
-        self.assertIn('<3/assets/manifest.json', listing)
-        self.assertNotIn('<3/assets/image.png', listing)
+        self.assertIn('<3/stream/assets/manifest.json', listing)
+        self.assertNotIn('<3/stream/assets/image.png', listing)
 
     def test_missing_local_asset_keeps_restore_record(self):
-        f = self.root / '<3/assets/photo.png'
+        f = self.root / '<3/stream/assets/photo.png'
         f.write_bytes(b'image')
         first = p.assets(self.root)
-        p.write_json(self.root / '<3/assets/manifest.json', first)
+        p.write_json(self.root / '<3/stream/assets/manifest.json', first)
         f.unlink()
         self.assertEqual(first, p.assets(self.root))
 
     def test_asset_symlink_cannot_escape_ghost(self):
-        (self.root / '<3/assets/link').symlink_to('/etc/hosts')
+        (self.root / '<3/stream/assets/link').symlink_to('/etc/hosts')
         with self.assertRaisesRegex(RuntimeError, 'unsafe path'):
             p.assets(self.root)
 
@@ -124,20 +123,20 @@ class PublicationTests(unittest.TestCase):
     def test_git_only_preserves_tracked_assets_without_reading_or_updating_media(self):
         p.git('config', 'user.name', 'Test', cwd=self.root)
         p.git('config', 'user.email', 'test@example.com', cwd=self.root)
-        manifest = self.root / '<3/assets/manifest.json'
+        manifest = self.root / '<3/stream/assets/manifest.json'
         manifest.write_text('{"original": true}\n')
         p.git('add', '.', cwd=self.root)
         p.git('commit', '-qm', 'initial', cwd=self.root)
         manifest.write_text('{"local": true}\n')
-        (self.root / '<3/assets/new.png').write_bytes(b'local media')
+        (self.root / '<3/stream/assets/new.png').write_bytes(b'local media')
         with patch.object(p, 'assets', side_effect=AssertionError('media must not be scanned')), patch('builtins.print'):
             p.prepare(self.root, 'move laptops', git_only=True)
             plan = p.read_json(self.root / '.ghost/publish-plan.json')
             p.validate(self.root, plan)
-            (self.root / '<3/assets/new.png').write_bytes(b'changed media')
+            (self.root / '<3/stream/assets/new.png').write_bytes(b'changed media')
             p.validate(self.root, plan)
         self.assertIsNone(plan['assets'])
-        self.assertEqual(p.git('show', plan['tree'] + ':<3/assets/manifest.json', cwd=self.root), '{"original": true}')
+        self.assertEqual(p.git('show', plan['tree'] + ':<3/stream/assets/manifest.json', cwd=self.root), '{"original": true}')
         self.assertEqual(manifest.read_text(), '{"local": true}\n')
         (self.root / 'note.md').write_text('new source')
         with self.assertRaisesRegex(RuntimeError, 'files changed'):
@@ -147,7 +146,7 @@ class PublicationTests(unittest.TestCase):
         p.git('config', 'user.name', 'Test', cwd=self.root)
         p.git('config', 'user.email', 'test@example.com', cwd=self.root)
         self.config['git'] = {'remote': 'origin', 'branch': 'main'}
-        self.config['site']['directory'] = '<3/products/personal-site'
+        self.config['site']['directory'] = '<3/artifacts/personal-site'
         p.write_json(self.root / 'ghost.publish.json', self.config)
         real_run = p.run
         def local_run(*args, **kw):
@@ -191,7 +190,7 @@ class PublicationTests(unittest.TestCase):
 
     def test_duplicate_assets_upload_once(self):
         for name in ['a.png', 'b.png']:
-            (self.root / '<3/assets' / name).write_bytes(b'same image')
+            (self.root / '<3/stream/assets' / name).write_bytes(b'same image')
         manifest = p.assets(self.root)
         item = next(iter(manifest['files'].values()))
         s = object.__new__(p.Storage)
@@ -202,7 +201,7 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(s.call.call_count, 2)
 
     def test_storage_limit_stops_before_upload(self):
-        (self.root / '<3/assets/a.png').write_bytes(b'large')
+        (self.root / '<3/stream/assets/a.png').write_bytes(b'large')
         s = object.__new__(p.Storage)
         s.config = {'max_upload_bytes': 1, 'max_archive_bytes': 100, 'max_objects': 100}
         s.inventory = Mock(return_value={})
@@ -215,14 +214,14 @@ class PublicationTests(unittest.TestCase):
         original = self.root / 'clip.mov'
         original.write_bytes(b'original video')
         before = p.assets(self.root)
-        p.write_json(self.root / '<3/assets/manifest.json', before)
-        original.rename(self.root / '<3/assets/clip.mov')
+        p.write_json(self.root / '<3/stream/assets/manifest.json', before)
+        original.rename(self.root / '<3/stream/assets/clip.mov')
         manifest = p.assets(self.root)
         self.assertIn('clip.mov', manifest['files'])
-        self.assertEqual(manifest['files']['clip.mov'], manifest['files']['<3/assets/clip.mov'])
+        self.assertEqual(manifest['files']['clip.mov'], manifest['files']['<3/stream/assets/clip.mov'])
         # Reproduce a historical path sorting before its current location.
         manifest['files'] = {name: manifest['files'][name]
-                             for name in ['clip.mov', '<3/assets/clip.mov']}
+                             for name in ['clip.mov', '<3/stream/assets/clip.mov']}
         item = manifest['files']['clip.mov']
         s = object.__new__(p.Storage)
         s.config = {'max_upload_bytes': 100, 'max_archive_bytes': 100, 'max_objects': 100}
@@ -230,7 +229,7 @@ class PublicationTests(unittest.TestCase):
         s.call = Mock(side_effect=[{}, {'ContentLength': item['bytes'], 'Metadata': {'sha256': item['sha256']}}])
         self.assertEqual(s.upload(self.root, manifest), 1)
         self.assertEqual(s.call.call_args_list[0].kwargs['Body'].name,
-                         str(self.root / '<3/assets/clip.mov'))
+                         str(self.root / '<3/stream/assets/clip.mov'))
         self.assertIn('clip.mov', manifest['files'])
 
 

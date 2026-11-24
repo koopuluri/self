@@ -5,7 +5,7 @@ import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 
 const root=path.dirname(fileURLToPath(import.meta.url));
-const ghostAssets=path.resolve(root,'../../<3/assets');
+const ghostAssets=path.resolve(root,'../../<3/stream/assets');
 const media=new Map([
   ['/media/lotus-square.mp4',path.join(ghostAssets,'lotus-bloom-square-10s.mp4')],
   ['/media/lotus-poster.jpg',path.join(ghostAssets,'lotus-bloom-poster.jpg')],

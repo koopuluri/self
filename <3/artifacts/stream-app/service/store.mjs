@@ -1,0 +1,1 @@
+../../../../tools/stream-records/store.mjs

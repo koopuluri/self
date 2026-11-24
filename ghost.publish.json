@@ -17,7 +17,7 @@
     "max_requests_per_run": 5000
   },
   "site": {
-    "directory": "<3/products/personal-site",
+    "directory": "<3/artifacts/personal-site",
     "project": "karthikuppu.com",
     "scope": "homan-projects",
     "inputs": [

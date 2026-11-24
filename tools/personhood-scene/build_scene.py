@@ -6,7 +6,7 @@ from pathlib import Path
 from mathutils import Vector
 
 HERE = Path(__file__).resolve().parent
-ASSETS = HERE.parent.parent / '<3/assets'
+ASSETS = HERE.parent.parent / '<3/stream/assets'
 OUT = ASSETS / 'personhood-v1.blend'
 TAU = '(frame-1)*0.05235987755982988'
 bpy.ops.wm.read_factory_settings(use_empty=True)

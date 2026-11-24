@@ -26,7 +26,7 @@ def digest(data):
 
 
 def inside(path):
-    legacy = {"assets/": "<3/assets/", "ghost-tools/": "tools/", "expression/videos/": "<3/videos/"}
+    legacy = {"<3/assets/": "<3/stream/assets/", "<3/videos/": "<3/artifacts/lovebirds/", "assets/": "<3/stream/assets/", "ghost-tools/": "tools/", "expression/videos/": "<3/artifacts/lovebirds/"}
     if not (ROOT / path).exists():
         for previous, current in legacy.items():
             if str(path).startswith(previous):
@@ -54,8 +54,8 @@ def resolve_source(source):
         if not redirect or redirect["sha256"] != source["sha256"]:
             raise ValueError("Missing source: " + source["source"])
         path = inside(redirect["path"])
-        if not path.is_relative_to(ROOT / "<3/assets"):
-            raise ValueError("Relocated media must be in <3/assets/")
+        if not path.is_relative_to(ROOT / "<3/stream/assets"):
+            raise ValueError("Relocated media must be in <3/stream/assets/")
     if digest(path.read_bytes()) != source["sha256"]:
         raise ValueError("Source changed: " + source["source"])
     return path
@@ -64,8 +64,8 @@ def resolve_source(source):
 def move_asset(source):
     """Move one explicitly selected local media file, recording its original identity."""
     source = inside(source)
-    assets = ROOT / "<3/assets"
-    assets.mkdir(exist_ok=True)
+    assets = ROOT / "<3/stream/assets"
+    assets.mkdir(parents=True, exist_ok=True)
     if source.is_relative_to(assets):
         return source
     if source.suffix.lower() not in {".mov", ".mp4", ".m4v", ".webm", ".wav", ".mp3", ".m4a", ".aac", ".aif", ".aiff", ".flac", ".ogg", ".png", ".jpg", ".jpeg", ".heic", ".webp", ".gif"}:
@@ -93,8 +93,8 @@ def move_asset(source):
 
 
 def video_doc(doc):
-    if not doc.resolve().is_relative_to(ROOT / "<3/videos"):
-        raise ValueError("Move the video document and its artifact folder into <3/videos/ first")
+    if not doc.resolve().is_relative_to(ROOT / "<3/artifacts"):
+        raise ValueError("Move the video document and its artifact folder into its own folder under <3/artifacts/ first")
 
 
 def atomic_update(path, before, after):
@@ -251,8 +251,8 @@ def freeze(spec_path, parent):
         spec["parent"] = None
     for source in spec["clips"] + ([spec["audio"]] if spec.get("audio") else []):
         path = resolve_source(source) if source.get("sha256") else inside(source["source"])
-        if not path.is_relative_to(ROOT / "<3/assets"):
-            raise ValueError("Move all referenced source media into <3/assets/ before checkpointing")
+        if not path.is_relative_to(ROOT / "<3/stream/assets"):
+            raise ValueError("Move all referenced source media into <3/stream/assets/ before checkpointing")
         source["source"] = relative(path)
         source["sha256"] = digest(path.read_bytes())
     renderer = (TOOL / "Renderer.swift").read_bytes()

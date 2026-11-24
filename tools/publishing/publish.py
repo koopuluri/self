@@ -89,13 +89,13 @@ def inside(root, relative):
 
 
 def assets(root):
-    previous = read_json(root / '<3/assets/manifest.json', {'files': {}})['files']
+    previous = read_json(root / '<3/stream/assets/manifest.json', {'files': {}})['files']
     result = dict(previous)  # Missing local media can be restored; never silently delete history.
-    paths = list((root / '<3/assets').rglob('*'))
+    paths = list((root / '<3/stream/assets').rglob('*'))
     paths += [p for p in root.iterdir() if p.suffix.lower() in MEDIA]
-    paths += [p for p in (root / '<3/taste').rglob('*')
+    paths += [p for p in (root / '<3/stream/taste').rglob('*')
               if p.suffix.lower() in MEDIA
-              and not any(part.startswith('.') for part in p.relative_to(root / '<3/taste').parts)]
+              and not any(part.startswith('.') for part in p.relative_to(root / '<3/stream/taste').parts)]
     for p in sorted(paths):
         if p.name in {'README.md', 'manifest.json', '.DS_Store'} or not p.is_file():
             continue
@@ -127,11 +127,23 @@ def snapshot(root, git_only=False):
     try:
         base = head(root) if git_only else None
         git('read-tree', base or '--empty', cwd=root, env=env)
-        paths = ['.', ':(exclude)<3/assets/**'] if git_only else ['.']
+        paths = ['.', ':(exclude)<3/stream/assets/**'] if git_only else ['.']
         # Check before writing any prospective source blobs to Git.
         tracked = run('git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', *paths, cwd=root).stdout
-        files = [inside(root, s.decode()) for s in tracked.split(b'\0') if s]
-        scan([p for p in files if p.is_file()])
+        candidates = {s.decode() for s in tracked.split(b'\0') if s}
+        files = []
+        for name in candidates:
+            file = root / name
+            if file.is_symlink():
+                # Git stores the relative link itself. Require its real file to
+                # be in the same reviewed source set (including shared modules).
+                target = file.resolve()
+                if (Path(os.readlink(file)).is_absolute() or not target.is_relative_to(root.resolve())
+                        or target.relative_to(root.resolve()).as_posix() not in candidates or not target.is_file()):
+                    raise RuntimeError(f'unsafe source link: {name}')
+            elif file.is_file():
+                files.append(inside(root, name))
+        scan(files)
         git('add', '-A', '--', *paths, cwd=root, env=env)
         tree = git('write-tree', cwd=root, env=env)
         entries = run('git', 'ls-tree', '-r', '-z', tree, cwd=root).stdout
@@ -163,7 +175,7 @@ def prepare(root, message, git_only=False):
     config = read_json(root / 'ghost.publish.json')
     manifest = None if git_only else assets(root)
     if not git_only:
-        write_json(root / '<3/assets/manifest.json', manifest)
+        write_json(root / '<3/stream/assets/manifest.json', manifest)
     tree, entries = snapshot(root, git_only=git_only)
     fp = hashlib.sha256((fingerprint(entries, config['site']['inputs']) +
         json.dumps(config['site'], sort_keys=True)).encode()).hexdigest()
@@ -300,10 +312,14 @@ class Storage:
 def restore(root):
     config = read_json(root / 'ghost.publish.json')['assets']
     storage = Storage(config)
-    manifest = read_json(root / '<3/assets/manifest.json')
+    manifest = read_json(root / '<3/stream/assets/manifest.json')
     restored = 0
     for rel, item in manifest['files'].items():
-        destination = '<3/' + rel if rel.startswith('assets/') else rel
+        destination = rel
+        for old, new in [('assets/', '<3/stream/assets/'), ('<3/assets/', '<3/stream/assets/'), ('<3/taste/', '<3/stream/taste/')]:
+            if rel.startswith(old):
+                destination = new + rel[len(old):]
+                break
         p = inside(root, destination)
         if p.exists():
             if digest(p) != item['sha256']:

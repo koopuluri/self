@@ -65,7 +65,7 @@ def purge_plan(root, relative):
         data = git(root, 'log', '--all', '--format=%H', '--', alias)
         if data:
             commits.update(data.decode().splitlines())
-    manifest_path = root / '<3/assets/manifest.json'
+    manifest_path = root / '<3/stream/assets/manifest.json'
     files = json.loads(manifest_path.read_text()).get('files', {}) if manifest_path.exists() else {}
     sha = None
     if target.is_file():

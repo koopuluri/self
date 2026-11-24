@@ -1,4 +1,4 @@
 # essays
 
-[Principles](essays/principles.md)  
-[The Personal Stack](essays/personal-stack.md)
+[Principles](artifacts/principles.md)\
+[The Personal Stack](artifacts/personal-stack.md)

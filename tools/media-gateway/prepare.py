@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def prepare(root, output):
     files = {}
-    for source in sorted((root / '<3/assets').rglob('*')):
+    for source in sorted((root / '<3/stream/assets').rglob('*')):
         if source.is_symlink():
             raise ValueError('Media symlinks are not publishable')
         if not source.is_file() or source.name in {'README.md', 'manifest.json', '.DS_Store'}:

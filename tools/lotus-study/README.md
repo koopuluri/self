@@ -8,9 +8,9 @@ Use the play button or Space, scrub the timeline, change playback speed, Color p
 
 ## Footage and crop
 
-Source: [Blooming lotus flower — banyan21](https://www.youtube.com/watch?v=6prMmX7hqeU), selected by the user. The local 1920 × 1080 source and 1080 × 1080 cropped clip are stored in self's `<3/assets/` directory. The square crop starts at x=460, y=0, selected after examining both the opening bud and the fully opened flower. It retains all the final petals with a small surrounding margin. The stored clip retains its original colors and timing; the file contains video only. Color treatment happens live in the browser and does not modify the source.
+Source: [Blooming lotus flower — banyan21](https://www.youtube.com/watch?v=6prMmX7hqeU), selected by the user. The local 1920 × 1080 source and 1080 × 1080 cropped clip are stored in self's `<3/stream/assets/` directory. The square crop starts at x=460, y=0, selected after examining both the opening bud and the fully opened flower. It retains all the final petals with a small surrounding margin. The stored clip retains its original colors and timing; the file contains video only. Color treatment happens live in the browser and does not modify the source.
 
-`server.mjs` serves only the three named media files (video, poster, music excerpt) from Ghost plus this project's static files. Byte-range responses support browser seeking. The source URL and crop are also recorded in `<3/assets/lotus-bloom-source.json`.
+`server.mjs` serves only the three named media files (video, poster, music excerpt) from Ghost plus this project's static files. Byte-range responses support browser seeking. The source URL and crop are also recorded in `<3/stream/assets/lotus-bloom-source.json`.
 
 The earlier procedural scene's source is retained in `previous-procedural/`; its vendored Three.js files remain in `vendor/`. Neither is loaded by this version.
 
@@ -18,7 +18,7 @@ The earlier procedural scene's source is retained in `previous-procedural/`; its
 
 Export video records one complete loop at 1080 × 1080 using the same color and grain shader. The local server saves a timestamped recording in Ghost assets. The selected look is Color pop 84, Film grain 91.
 
-`stack-icons.svg` is drawn from scratch on three shared 24-unit grids: 1.8-unit medium strokes, rounded caps and joins, consistent optical weight, a symmetrical π with mirrored legs, and warm ivory. The row is 13% of the square frame width, fixed at the center and sized to fit the opening bud. It is also composited into video exports. A reusable copy lives in `<3/assets/manifesto-stack-icons.svg`.
+`stack-icons.svg` is drawn from scratch on three shared 24-unit grids: 1.8-unit medium strokes, rounded caps and joins, consistent optical weight, a symmetrical π with mirrored legs, and warm ivory. The row is 13% of the square frame width, fixed at the center and sized to fit the opening bud. It is also composited into video exports. A reusable copy lives in `<3/stream/assets/manifesto-stack-icons.svg`.
 
 The lotus is lifted 2% of the frame height and shifted right approximately 0.5222% (21.6 pixels up and 5.64 pixels right at 1080, after a 3-pixel leftward refinement) to align the final bud with the stationary icon row. This translation is applied before color and grain in the shader, so preview and export have identical placement.
 

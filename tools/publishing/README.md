@@ -4,9 +4,9 @@ One workflow publishes the complete source collection to GitHub, backs up media 
 
 ## everyday use
 
-Ask π to **publish ghost**. The [skill](../../.agents/skills/publish-ghost/SKILL.md) inspects changes, prepares a snapshot and message, waits for message approval, and executes that exact plan. A changed source file, asset, destination, or publishing configuration invalidates the plan. No commit, GitHub push, asset upload, or site deployment precedes approval.
+For a coordinated release, the commands below prepare and execute a snapshot. See the [repository publication instructions](../../AGENTS.md#publishing-self). A changed source file, asset, destination, or publishing configuration invalidates the plan. No commit, GitHub push, asset upload, or site deployment precedes approval.
 
-The implementation lives here; configuration is in `../../ghost.publish.json`. `<3/assets/manifest.json` records local filenames, sizes, checksums, and private immutable object keys. It contains no access credentials or public media URLs. The archive includes assets, completed lens taste screenshots/audio, and loose root-level media without moving or rewriting the originals. A missing local file retains its manifest entry for restoration; removing archived objects is a separate explicit operation.
+The implementation lives here; configuration is in `../../ghost.publish.json`. `<3/stream/assets/manifest.json` records local filenames, sizes, checksums, and private immutable object keys. It contains no access credentials or public media URLs. The archive includes assets, completed lens taste screenshots/audio, and loose root-level media without moving or rewriting the originals. A missing local file retains its manifest entry for restoration; removing archived objects is a separate explicit operation.
 
 ```sh
 python3 tools/publishing/publish.py prepare --message 'bring the site and tools into ghost'
@@ -18,12 +18,12 @@ tools/publishing/.venv/bin/python tools/publishing/publish.py restore
 
 Preparation uses an isolated Git index, leaves the user's staging untouched, and never commits. The plan and resumable receipts live in ignored `.ghost/`. Publish validates the plan, builds changed site inputs, verifies bucket privacy, uploads missing immutable objects, commits and pushes, then deploys. Concurrent publishers on this machine are excluded. Pushes never force-update remote history. An ambiguous deployment stops for inspection instead of blindly retrying.
 
-For a source-only laptop handoff, add `--git-only` to `prepare`. This mode is part of the approved plan: it excludes changes under `<3/assets/`, preserves already tracked asset metadata from HEAD, and skips asset scanning, manifest updates, R2 credentials/uploads, and all site deployment steps. Ordinary Git exclusions still apply to credentials, local runtime state, media bytes, dependencies, and builds. Execute the approved plan with the same `publish --approved-plan PLAN_ID` command.
+For a source-only laptop handoff, add `--git-only` to `prepare`. This mode is part of the approved plan: it excludes changes under `<3/stream/assets/`, preserves already tracked asset metadata from HEAD, and skips asset scanning, manifest updates, R2 credentials/uploads, and all site deployment steps. Ordinary Git exclusions still apply to credentials, local runtime state, media bytes, dependencies, and builds. Execute the approved plan with the same `publish --approved-plan PLAN_ID` command.
 
 ## setup
 
 - GitHub: the approved target is the public `koopuluri/self` repository on `main`. The publisher creates it if absent after approval. Git author details use the existing local configuration.
-- Site foundation: `<3/products/personal-site/` imports `koopuluri/karthikuppu.com` at `1aa1b2017fddb6b55be480725d173c6a61c8a608`, retaining the current homepage, content evidence, design preferences and historical routes. The original repository is preserved.
+- Site foundation: `<3/artifacts/personal-site/` imports `koopuluri/karthikuppu.com` at `1aa1b2017fddb6b55be480725d173c6a61c8a608`, retaining the current homepage, content evidence, design preferences and historical routes. The original repository is preserved.
 - Vercel: reuse project `karthikuppu.com`, scope `homan-projects` (the CLI-resolved owner of the existing project), serving `https://www.koopuluri.com`. Both the Ghost root and site `vercel.json` disable automatic Git deployments. The publisher uses its local Vercel CLI and a prebuilt site. No private archive files are needed by or uploaded with that build.
 - R2: a dedicated **private Standard-storage** bucket named `ghost-private`. Disable `r2.dev`, attach no direct public custom domains, and do not issue public/presigned URLs. Set billing alerts at $10 and $20 in Cloudflare. The publisher checks the public-domain settings before every upload/restore; public serving must use only the separately approved capped gateway.
 - Credentials: use the environment variables named in `.env.example`, or the ignored `.ghost/r2.env` file with owner-only permissions. Use a bucket-scoped R2 Object Read & Write credential and a Cloudflare API token with Account R2 Storage Read for privacy checks. Never paste keys into chat, source, or a command argument.
@@ -35,7 +35,7 @@ The user accepted private R2 with local limits and alerts on November 3, 2026, a
 
 Initial application limits: 100 GB total stored archive, 10 GB of new uploads per run, 10,000 stored objects, and 5,000 reserved S3 request attempts per run. Large single uploads above 5 GB stop before upload. Existing object versions count toward the archive limit. These limits only govern this publisher, not other clients or account-wide costs. Storage continues accruing while bytes remain stored. Normal publishing never deletes historical media to reduce a bill.
 
-Media is public by policy. The storage bucket stays private; the capped read-only gateway described below will serve reviewed files. Until that external setup is complete, shared media works only in local previews. Site-specific images remain tracked under `<3/products/personal-site/public`.
+Media is public by policy. The storage bucket stays private; the capped read-only gateway described below will serve reviewed files. Until that external setup is complete, shared media works only in local previews. Site-specific images remain tracked under `<3/artifacts/personal-site/public`.
 
 ## site inputs and recovery
 
@@ -55,7 +55,7 @@ The active source layout is `<3/`, `π/`, `$/`, and `tools/`. The site now reads
 
 ```sh
 python3 tools/publishing/review.py review
-python3 tools/publishing/review.py purge-plan '<3/notes/example.md'
+python3 tools/publishing/review.py purge-plan '<3/stream/notes/example.md'
 ```
 
 These commands write local reports without external actions. Purge planning includes known former paths, source references, Git history and archived objects. It never interprets a file deletion as permission to destroy historical records or remote objects. The manifest retains older entries for restoration; an explicit purge must account for them. The review is advisory and cannot detect every private fact or inspect all media content. Review outgoing history as well as the current diff.

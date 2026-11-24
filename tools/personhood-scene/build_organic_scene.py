@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ASSETS = HERE.parent.parent / '<3/assets'
+ASSETS = HERE.parent.parent / '<3/stream/assets'
 FORMAT = json.loads((HERE / 'manifesto_format.json').read_text())
 TAU = '(frame-1)*0.05235987755982988'
 bpy.ops.wm.read_factory_settings(use_empty=True)

@@ -1,0 +1,22 @@
+{
+  "provider": "chatgpt",
+  "model": "gpt-6.2-astra",
+  "chatgpt": true,
+  "reasoning": "medium",
+  "tiers": {
+    "chatgpt": {
+      "easy": {
+        "model": "gpt-6.2-sol",
+        "reasoning": "medium"
+      },
+      "medium": {
+        "model": "gpt-6.2-astra",
+        "reasoning": "high"
+      },
+      "hard": {
+        "model": "gpt-6.2-astra",
+        "reasoning": "xhigh"
+      }
+    }
+  }
+}

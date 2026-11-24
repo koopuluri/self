@@ -18,8 +18,8 @@ class ProcessTests(unittest.TestCase):
         self.tool = self.root / "tools/video-process"
         self.tool.mkdir(parents=True)
         (self.tool / "Renderer.swift").write_text("renderer version one")
-        (self.root / "<3/videos").mkdir(parents=True)
-        self.doc = self.root / "<3/videos/film.md"
+        (self.root / "<3/artifacts/lovebirds").mkdir(parents=True)
+        self.doc = self.root / "<3/artifacts/lovebirds/film.md"
         self.doc.write_text("My original brief.\n")
         self.session = self.root / "session.jsonl"
         self.rows = [dict(type="session_meta", payload=dict(id="test-chat")),
@@ -28,10 +28,10 @@ class ProcessTests(unittest.TestCase):
         self.add_row("assistant", "I’ll lengthen the opening.")
         self.root_patch = patch.object(p, "ROOT", self.root); self.root_patch.start(); self.addCleanup(self.root_patch.stop)
         self.tool_patch = patch.object(p, "TOOL", self.tool); self.tool_patch.start(); self.addCleanup(self.tool_patch.stop)
-        (self.root / "<3/assets").mkdir()
-        self.source = self.root / "<3/assets/source.mov"; self.source.write_bytes(b"unchanged media")
+        (self.root / "<3/stream/assets").mkdir(parents=True)
+        self.source = self.root / "<3/stream/assets/source.mov"; self.source.write_bytes(b"unchanged media")
         self.draft = self.root / "draft.json"
-        self.draft.write_text(json.dumps(dict(schema="ghost.video.v1", title="Test film", clips=[dict(source="<3/assets/source.mov", startFrame=0, frames=60)], audio=None, notes=[])))
+        self.draft.write_text(json.dumps(dict(schema="ghost.video.v1", title="Test film", clips=[dict(source="<3/stream/assets/source.mov", startFrame=0, frames=60)], audio=None, notes=[])))
 
     def add_row(self, role, text, channel=None):
         self.rows.append(dict(type="response_item", timestamp="2026-11-05T07:00:00Z", payload=dict(type="message", role=role, channel=channel, content=[dict(type="input_text" if role == "user" else "output_text", text=text)])))
@@ -153,19 +153,19 @@ class ProcessTests(unittest.TestCase):
 
     def test_new_checkpoints_require_organized_docs_and_media(self):
         outside = self.root / 'outside.md'; outside.write_text('brief')
-        with self.assertRaisesRegex(ValueError, "<3/videos"):
+        with self.assertRaisesRegex(ValueError, "<3/artifacts/"):
             p.initialize(outside)
         unorganized = self.root / 'loose.mov'; unorganized.write_bytes(b'loose')
         draft = json.loads(self.draft.read_text()); draft['clips'][0]['source'] = 'loose.mov'
         self.draft.write_text(json.dumps(draft))
         p.initialize(self.doc)
-        with self.assertRaisesRegex(ValueError, "<3/assets/"):
+        with self.assertRaisesRegex(ValueError, "<3/stream/assets/"):
             p.checkpoint(self.doc, self.draft, 'Draft', None)
 
     def test_relocated_asset_preserves_old_recipe_and_runtime_hash_checks(self):
         p.initialize(self.doc)
         artifact = p.checkpoint(self.doc, self.draft, 'First', None)
-        # Simulate a valid historical recipe predating the <3/assets/ constraint.
+        # Simulate a valid historical recipe predating the <3/stream/assets/ constraint.
         legacy = self.root / 'source.mov'; legacy.write_bytes(self.source.read_bytes())
         r = json.loads(artifact.read_text()); r['clips'][0]['source'] = 'source.mov'; r.pop('id')
         r['id'] = p.digest(json.dumps(r, sort_keys=True, separators=(',', ':')).encode())[:20]
@@ -175,11 +175,11 @@ class ProcessTests(unittest.TestCase):
         self.assertFalse(legacy.exists())
         self.assertEqual(p.verify(artifact)['id'], r['id'])
         runtime = json.loads(p.runtime_recipe(artifact).read_text())
-        self.assertEqual(runtime['clips'][0]['source'], '<3/assets/source.mov')
+        self.assertEqual(runtime['clips'][0]['source'], '<3/stream/assets/source.mov')
         self.assertEqual(artifact.read_bytes(), before)
         self.draft.write_bytes(before)
         next_artifact = p.checkpoint(self.doc, self.draft, 'After organization', str(artifact))
-        self.assertEqual(p.verify(next_artifact)['clips'][0]['source'], '<3/assets/source.mov')
+        self.assertEqual(p.verify(next_artifact)['clips'][0]['source'], '<3/stream/assets/source.mov')
         self.assertEqual(artifact.read_bytes(), before)
         self.source.write_bytes(b'corrupted')
         with self.assertRaisesRegex(ValueError, "Source changed"):

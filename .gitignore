@@ -23,9 +23,9 @@ __pycache__/
 *.key
 
 # Media bytes live in R2; Git tracks their restoration manifest.
-/<3/assets/*
-!/<3/assets/README.md
-!/<3/assets/manifest.json
+/<3/stream/assets/*
+!/<3/stream/assets/README.md
+!/<3/stream/assets/manifest.json
 /*.png
 /*.jpg
 /*.jpeg
@@ -42,15 +42,22 @@ __pycache__/
 /*.blend
 
 # Lens taste media is backed up only by the publication workflow.
-/<3/taste/**/*.png
-/<3/taste/**/*.m4a
-/<3/taste/.draft-*/
+/<3/stream/taste/**/*.png
+/<3/stream/taste/**/*.m4a
+/<3/stream/taste/.draft-*/
 
 # Local π execution state; durable memory remains ordinary workspace material.
 /π/.runtime/
-/π/threads/
-/π/logs/
+/π/threads/*
+!/π/threads/README.md
+/π/logs/*
+!/π/logs/README.md
 /π/chats/*.json
 
 # Local inbox polling cursors.
-/<3/inbox/state/
+/<3/stream/inbox/state/
+
+# Local compatibility paths used by pre-migration desktop releases.
+/<3/products
+/<3/notes
+/<3/assets
