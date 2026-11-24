@@ -74,3 +74,34 @@ test('opening a document records its path, and stale saves preserve the newer fi
   await assert.rejects(readWorkspaceDocument(root, '../outside.md'));
   assert.equal((await readWorkspaceDocument(root, '<3/stream/index.md')).readOnly, true);
 });
+
+test('the margin restores context on demand and binds the adjacent reply to its original chat', async t => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'stream-margin-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const store = await new StreamStore(root).init();
+  const events = [];
+  const client = await piClient(store, event => events.push(event));
+  const source = await store.append('/which draft?');
+  const card = { id: 'thread', chatId: 'draft', title: 'choose a draft', summary: 'comparing two drafts', state: 'idle' };
+  const chat = { id: 'draft', threadId: 'thread', messages: [
+    { role: 'user', text: 'which draft?' }, { role: 'assistant', text: 'the second draft' },
+  ] };
+  await fs.mkdir(path.join(store.pi, 'chats'), { recursive: true });
+  await fs.writeFile(path.join(store.pi, 'chats/draft.json'), JSON.stringify(chat));
+  await fs.writeFile(path.join(store.pi, '.runtime/open-threads.json'), JSON.stringify([card]));
+  await store.transact(() => Object.assign(store.metadata.beats[source], {
+    kind: 'bubble', chatId: 'draft', messageIndex: 0, bubble: chat.messages[0],
+  }));
+  await client.syncMargin();
+  await client.syncMargin();
+  assert.deepEqual(events, [{ event: 'open-threads', cards: [card] }]);
+  const shown = await client.showThread({ threadId: card.id, visible: [source] });
+  assert.equal(store.metadata.beats[shown.first].bubble.text, 'the second draft');
+  const tail = await client.showThread({ threadId: card.id, visible: [] });
+  assert.match(store.metadata.beats[tail.first].bubble.text, /choose a draft\n\ncomparing two drafts/);
+  await store.edit([{ id: tail.slot, before: '', text: '/yes' }]);
+  const request = await client.prompt({ bubble: true, sourceBeatId: tail.slot, sourceText: '/yes', text: 'yes' });
+  const queued = JSON.parse(await fs.readFile(path.join(store.pi, '.runtime/mailbox-v1/in', request + '.json')));
+  assert.equal(queued.args.chatId, chat.id);
+  assert.equal(await fs.readFile(path.join(store.pi, 'chats/draft.json'), 'utf8'), JSON.stringify(chat));
+});

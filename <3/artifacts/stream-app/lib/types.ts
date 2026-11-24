@@ -2,7 +2,8 @@ export type Beat = { id: number; text: string; kind: 'text'|'asset'|'chat'|'bubb
 export type Snapshot = { beats: Beat[]; nextId: number; hash: string; retired: Record<number, number|null>; file: string };
 export type Chat = { id: string; threadId: string; messages: { role: string; text: string; at: string; source?: string }[]; status: string; liveText?: string; activity?: string; canStop?: boolean };
 export type Reply = { value: any; snapshot?: Snapshot };
-export type StreamEvent = { event: string; source?: number; phase?: 'working' | 'ready' | 'done'; chatId?: string; messageIndex?: number; snapshot?: Snapshot; message?: string; id?: number; chat?: Chat };
+export type ThreadCard = { id: string; title: string; summary: string; state: string; action: string };
+export type StreamEvent = { cards?: ThreadCard[]; event: string; source?: number; phase?: 'working' | 'ready' | 'done'; chatId?: string; messageIndex?: number; snapshot?: Snapshot; message?: string; id?: number; chat?: Chat };
 declare global {
   interface Window { streamAPI?: {
     call(method: string, args?: any): Promise<Reply>;

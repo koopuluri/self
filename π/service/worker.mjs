@@ -56,8 +56,8 @@ export async function startWorker(root, plan, approveNetwork, shouldRetire = asy
     }
     await fs.unlink(path.join(box,'running',file));
   }
-  let statusDirty = true, ranking = false;
-  store.on('thread-changed', () => { statusDirty = true; });
+  let statusDirty = true, marginDirty = true, ranking = false;
+  store.on('thread-changed', () => { statusDirty = marginDirty = true; });
   function refreshIfNeeded() {
     if (!statusDirty || ranking) return;
     statusDirty = false;
@@ -65,7 +65,7 @@ export async function startWorker(root, plan, approveNetwork, shouldRetire = asy
     void refreshStatusRanking(agent)
       .catch(error => eventLog(agent, { function: 'compose-status', error: error.message }))
       .catch(error => console.error(error.message))
-      .finally(() => { ranking = false; });
+      .finally(() => { ranking = false; marginDirty = true; });
   }
   const busy = new Set();
   async function handle(file, request) {
@@ -83,7 +83,7 @@ export async function startWorker(root, plan, approveNetwork, shouldRetire = asy
             models: () => agent.models(request.args.provider),
             configure: () => agent.configure(request.args),
             threads: () => agent.threads(),
-            archiveThreads: () => agent.archiveThreads(request.args.ids),
+            archiveThreads: () => agent.archiveThreads(request.args.ids, request.args.stopActive),
             statusSnapshot: () => composeStatus(agent),
             continueThread: () => agent.continueThread(request.args),
             reveal: () => agent.reveal(),
@@ -105,7 +105,7 @@ export async function startWorker(root, plan, approveNetwork, shouldRetire = asy
     }
     await fs.unlink(claim);
   }
-  let polling = false, previousReads = '', checkedStatuses = 0;
+  let polling = false, checkedStatuses = 0;
   async function poll() {
     if (polling) return;
     polling = true;
@@ -120,10 +120,12 @@ export async function startWorker(root, plan, approveNetwork, shouldRetire = asy
         if (m?.report && m.text !== receipt.text) { m.text = receipt.text; await agent.saveChat(c); }
       }
       checkedStatuses = history.length;
-      const reads = JSON.stringify(store.receipts.readResults ?? {});
-      if (reads !== previousReads) {
-        for (const read of Object.values(store.receipts.readResults ?? {})) await agent.settleRead(read);
-        previousReads = reads;
+      if (marginDirty) {
+        marginDirty = false;
+        try {
+          const { open } = await composeStatus(agent);
+          await atomicWrite(path.join(store.pi, '.runtime/open-threads.json'), JSON.stringify(open));
+        } catch (error) { marginDirty = true; throw error; }
       }
       if (await shouldRetire()) {
         if (!busy.size && !agent.running.size && !agent.displays.size && !agent.connecting && !agent.submissions.size) retire();

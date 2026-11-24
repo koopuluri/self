@@ -60,7 +60,6 @@ class Block extends WidgetType {
         reaction.append(el('span', 'emoji', message.reaction));
         reaction.setAttribute('aria-label', 'π reacted ' + message.reaction); outer.append(reaction);
       }
-      if (message.failure) outer.append(el('div', 'delivery-error', message.failure));
     } else if (b.kind === 'chat') {
       box.append(el('span', 'muted', 'Conversation unavailable in this workspace.'));
     }

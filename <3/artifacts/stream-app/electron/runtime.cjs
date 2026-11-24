@@ -118,7 +118,7 @@ app.whenReady().then(async () => {
     if (rendererReady && !closingConfirmed) { event.preventDefault(); notify({ event: 'before-close' }); }
   });
   window.on('blur', () => void call('focus', { id: null }).catch(() => {}));
-  ipcMain.handle('stream:call', (event, method, args) => { trusted(event); const allowed = ['load','snapshot','readBlockDocument','saveBlockDocument','document','resolve','edit','append','complete','remove','focus','preview','ui','chat','prompt','replyState','deliver','models','configure','threads','stop', 'reveal','continueThread']; if (!allowed.includes(method)) throw new Error('Unknown operation'); if (method === 'load') rendererReady = true; return call(method, args); });
+  ipcMain.handle('stream:call', (event, method, args) => { trusted(event); const allowed = ['load','snapshot','readBlockDocument','saveBlockDocument','document','resolve','edit','append','complete','remove','focus','preview','ui','chat','prompt','replyState','deliver','models','configure','threads','stop', 'reveal','continueThread','archiveThread','showThread']; if (!allowed.includes(method)) throw new Error('Unknown operation'); if (method === 'load') rendererReady = true; return call(method, args); });
   ipcMain.on('stream:close-ready', event => { trusted(event); closingConfirmed = true; window.close(); });
   ipcMain.handle('stream:assets', (event, paths) => { trusted(event); return call('assets', { paths }); });
   ipcMain.handle('stream:pick', async event => { trusted(event); const result = await dialog.showOpenDialog(window, { properties: ['openFile', 'multiSelections'] }); return result.canceled ? null : call('assets', { paths: result.filePaths }); });

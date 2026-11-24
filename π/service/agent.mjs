@@ -9,7 +9,7 @@ import { builtinModels } from '@earendil-works/pi-ai/providers/all';
 import { modelForPlan } from './chatgpt.mjs';
 import { modelCall } from './model-call.mjs';
 import { hydrate, serializeThread, taskContext } from './thread-session.mjs';
-import { processMessage, organizeThreads, composeStatus, closeThread, functionConfig, eventLog, sharedWorkspaceRoot, beatContext } from './functions.mjs';
+import { processMessage, organizeThreads, composeStatus, functionConfig, eventLog, sharedWorkspaceRoot, beatContext } from './functions.mjs';
 import { actionFor, isStatusCheck, offlinePull, recentStatuses, reportText } from './status.mjs';
 import { validateToolCall } from '@earendil-works/pi-ai';
 import { atomicWrite, readJSON, stamp } from './io.mjs';
@@ -81,10 +81,6 @@ export class Coordinator {
   async restore() {
     this.pending = await readJSON(path.join(this.store.pi, '.runtime/pending.json'), []);
     const threads = await this.threads();
-    for (const thread of threads) {
-      const receipt = this.store.metadata.readResults?.[thread.id];
-      if (receipt) await this.settleRead(receipt);
-    }
     for (const thread of threads) if (['running', 'queued'].includes(thread.status)) {
       const lastAssistant = thread.messages.findLastIndex(m => m.role === 'assistant');
       const results = new Set(thread.messages.slice(lastAssistant + 1).map(m => m.toolCallId));
@@ -232,11 +228,12 @@ export class Coordinator {
     }
     return true;
   }
-  async archiveThreads(ids) {
+  async archiveThreads(ids, stopActive = true) {
     const archived = [];
     for (const id of ids) {
       const thread = await this.thread(id);
       if (thread.lifecycle === 'archived') continue;
+      if (!stopActive && ['running', 'queued'].includes(thread.status)) throw new Error('This thread is now running. Choose stop and archive.');
       await this.stop(thread.chatId);
       // The run's final save must finish before archiving its session.
       while (this.running.has(id)) await new Promise(resolve => setTimeout(resolve, 25));
@@ -357,14 +354,6 @@ export class Coordinator {
     await this.saveChat(chat);
     if (slot == null) await this.deliver(chat.id, chat.sourceBeatId);
   }
-  async settleRead({ threadId, chatId, index }) {
-    const thread = await this.thread(threadId);
-    if (thread.chatId !== chatId || thread.status !== 'idle' || !(thread.closeAfterRead || thread.archiveAfterDelivery)) return;
-    const chat = await this.chat(chatId);
-    if (index !== chat.messages.length - 1) return;
-    closeThread(thread, chatId + '-' + index);
-    await this.saveThread(thread);
-  }
   async submit({ chatId, text, contextBeatId, sourceBeatId, sourceText, slot, bubble = false, rows, lastStatus }) {
     await this.initialized;
     if (typeof text !== 'string' || (!bubble && !text.trim())) return null;
@@ -405,6 +394,10 @@ export class Coordinator {
       const job = this.jobs.get(chatId);
       chat = job?.chat ?? await this.chat(chatId);
       thread ??= job?.thread ?? await this.thread(chat.threadId);
+      if (bubble && thread.networkRequest && !route && !page && control === null && !connect && !redact) {
+        const decision = await this.route(status, text, beatContext(prior.slice(-20)), link, lastStatus);
+        if (decision.action === 'review-network' && decision.threadId === thread.id) route = decision;
+      }
     } else {
       thread = { id: randomUUID(), title: route?.title || text.slice(0, 100), status: 'idle', lifecycle: 'open',
         createdAt: stamp(), updatedAt: stamp(), contextBeatId, sourceBeatId, messages: [] };
@@ -573,7 +566,6 @@ export class Coordinator {
       return id;
     });
     if (beatId == null) return;
-    if (message.read) await this.settleRead(message.read);
     if (message.report) await this.saveChat(chat);
     await eventLog(this, { event: 'delivery', threadId: chat.threadId, chatId, beatIds: [beatId], traceId: message.traceId });
   }
@@ -852,8 +844,6 @@ export class Coordinator {
       this.jobs.delete(chat.id);
       delete thread.networkDecision;
       await this.saveThread(thread); await this.saveChat(chat);
-      const read = this.store.metadata.readResults?.[thread.id];
-      if (read) await this.settleRead(read);
     }
   }
 }

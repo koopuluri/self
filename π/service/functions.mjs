@@ -68,31 +68,18 @@ export async function processMessage(agent, config, text, beats, link, lastStatu
   return { ...decision, callId, context: beats.filter(b => decision.beatIds.includes(b.id)) };
 }
 
-export function closeThread(thread, closureId) {
-  thread.lifecycle = 'archived';
-  thread.closures ??= [];
-  if (!thread.closures.some(c => c.closureId === closureId)) thread.closures.push({ id: thread.id, title: thread.title, closureId });
-  delete thread.closeAfterRead;
-  delete thread.archiveAfterDelivery;
-}
-
 // Only this task's compact card can change. There is no delivery decision here.
 export async function organizeThreads(agent, job, outcome) {
   const { thread } = job;
   const link = { traceId: job.traceId, triggerThreadId: thread.id, triggerCallId: job.taskCallId };
   const card = await judgment(agent, 'update-thread', job.config, { task: indexEntry(thread), outcome },
-    '{"title":string,"summary":string,"nextAction":string,"disposition":"open|read|closed"}', link, job.controller.signal);
-  if (![card.title, card.summary, card.nextAction].every(v => typeof v === 'string') ||
-      !['open', 'read', 'closed'].includes(card.disposition)) throw new Error('Invalid thread card');
+    '{"title":string,"summary":string,"nextAction":string}', link, job.controller.signal);
+  if (![card.title, card.summary, card.nextAction].every(v => typeof v === 'string')) throw new Error('Invalid thread card');
   job.controller.signal.throwIfAborted();
   if (thread.inbox?.length) return;
   thread.title = card.title.trim() || thread.title;
   thread.summary = card.summary;
   thread.nextAction = card.nextAction;
-  thread.closeAfterRead = !outcome.question && card.disposition === 'read';
-  if (!outcome.question && card.disposition === 'closed') {
-    closeThread(thread, job.traceId);
-  }
   await agent.saveThread(thread);
   await eventLog(agent, { ...link, function: 'update-thread', affectedThreadIds: [thread.id] });
 }
@@ -114,7 +101,7 @@ function applyRanking(open, ranking) {
 async function statusCards(agent) {
   const threads = await agent.trackedThreads();
   const open = threads.filter(t => t.lifecycle !== 'archived').map(t => ({ id: t.id, title: t.title,
-    summary: t.summary || '', state: t.status, progress: t.progress, action: actionFor(t) }));
+    chatId: t.chatId, summary: t.summary || '', state: t.status, progress: t.progress, action: actionFor(t) }));
   const closed = threads.flatMap(t => t.closures ?? []).filter(c => !agent.store.metadata.reportedClosures?.[c.closureId]);
   return { open, closed };
 }

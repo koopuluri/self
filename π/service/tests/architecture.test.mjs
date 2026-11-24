@@ -78,7 +78,7 @@ test('router selects an open thread across writing beats; organizer holds the re
   assert.ok(calls.every(c => c.traceId && c.request && c.response));
 });
 
-test('a follow-up to a just-read result reopens its thread with the earlier answer', async t => {
+test('a follow-up to a just-read result keeps its thread open with the earlier answer', async t => {
   const { agent, store } = await fixture(t);
   let target, continuation;
   useMock(agent, context => {
@@ -98,7 +98,7 @@ test('a follow-up to a just-read result reopens its thread with the earlier answ
   target = first.threadId;
   await send(agent, store, '');
   await send(agent, store, '1');
-  assert.equal((await agent.thread(target)).lifecycle, 'archived');
+  assert.equal((await agent.thread(target)).lifecycle, 'open');
   const next = await send(agent, store, 'revise that list using my words');
   await idle(agent);
   assert.equal(next.id, first.id);
@@ -206,9 +206,9 @@ test('natural language references use the delivered order across new tasks, draf
     assert.equal(store.snapshot().beats.at(-2).bubble.text, 'lesson for astronomy');
   }
   await send(reopened, store, '');
-  assert.match(store.snapshot().beats.at(-2).bubble.text, /completed and closed\n- astronomy/);
+  assert.match(store.snapshot().beats.at(-2).bubble.text, /2\. astronomy/);
   await send(reopened, store, '');
-  assert.equal(store.snapshot().beats.at(-2).bubble.text, '1. algebra (read the lesson)\n2. botany (read the lesson)');
+  assert.equal(store.snapshot().beats.at(-2).bubble.text, '1. algebra (read the lesson)\n2. astronomy (read the lesson)\n3. botany (read the lesson)');
   await send(reopened, store, 'what did the last two updates say?');
   assert.equal(store.snapshot().beats.at(-2).bubble.text, store.metadata.statusHistory.slice(-2).reverse().map(r => r.text).join('\n\n—\n\n'));
   assert.ok(routed.every(d => d.message !== ''));
@@ -285,7 +285,7 @@ test('a routed cancellation stops its target and leaves a second task independen
   assert.ok(!store.snapshot().beats.some(b => b.bubble?.text === 'Second task complete'));
 });
 
-test('a completed action is reported once even when two status replies are prepared together', async t => {
+test('a completed action stays open across concurrent status deliveries', async t => {
   const { agent, store } = await fixture(t);
   useMock(agent, context => {
     if (context.systemPrompt.includes('name: process-message')) return route(JSON.parse(context.messages[0].content), 'new');
@@ -304,7 +304,8 @@ test('a completed action is reported once even when two status replies are prepa
   await store.complete(store.beats.at(-1).id);
   const second = await request();
   await Promise.all([first(), second()]);
-  assert.deepEqual(store.metadata.statusHistory.map(r => r.closed.length), [1, 0]);
+  assert.deepEqual(store.metadata.statusHistory.map(r => r.closed.length), [0, 0]);
+  assert.ok(store.metadata.statusHistory.every(r => r.open.some(t => t.title === 'filed receipt')));
 });
 
 test('network work yields without opening a dialog until the writer requests review', async t => {

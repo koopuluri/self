@@ -73,7 +73,6 @@ main { height: 100%; }
 }
 .reaction::before { width: 9px; height: 9px; bottom: -2px; right: 0; }
 .reaction::after { width: 4px; height: 4px; bottom: -7px; right: -3px; }
-.delivery-error { color: #874a38; font-size: 12px; }
 .asset-block .block-frame { padding: var(--space-detail); }
 .expand-image { display: block; max-width: 100%; margin: auto; padding: 0; cursor: zoom-in; }
 .image-stage { height: 100%; overflow: auto; display: grid; }
@@ -135,3 +134,28 @@ a[href]:is(:hover,:focus-visible) { color: #2058af; text-decoration-color: curre
 .block-body .cm-content { margin-inline: auto; flex: 0 1 700px; padding: 20px 24px 64px; }
 .block-body .cm-scroller { overflow: auto; }
 .block-status:not(:empty) { padding: 8px 16px; }
+
+.thread-margin {
+  position: fixed; z-index: 2; top: 80px; bottom: 32px; left: 16px;
+  width: clamp(108px, calc((100vw - 582px) / 2 - 32px), 240px);
+  display: flex; flex-direction: column; gap: var(--space-detail);
+  overflow-y: auto; font-size: 12px; color: #75776f;
+}
+.thread-row { position: relative; }
+.thread-title { display: block; width: 100%; padding: 4px; text-align: left; overflow-wrap: anywhere; }
+.thread-row:is([data-state="waiting_for_you"],[data-state="waiting_for_configuration"]) { color: #a35b16; }
+.thread-row:is([data-state="failed"],[data-state="interrupted"]) { color: #ac4538; }
+.archive-thread { display: block; margin-left: 4px; padding: 1px 5px; font-size: 10px; background: #efefeb; }
+.thread-row:not(:hover):not(:focus-within) .archive-thread { position: absolute; opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .thread-row[data-state="working"] .thread-title {
+    background-image: linear-gradient(100deg, #74766e 30%, #adada7 50%, #74766e 70%);
+    background-size: 240% 100%; background-clip: text; color: transparent;
+    animation: thread-working 3s linear infinite;
+  }
+  @keyframes thread-working { from { background-position: 100% 0; } to { background-position: -70% 0; } }
+}
+@media (max-width: 880px) {
+  .thread-margin { top: 48px; left: 8px; width: clamp(84px, 17vw, 144px); }
+  main:has(.thread-margin) .editor-host { margin-left: clamp(100px, 20vw, 164px); }
+}

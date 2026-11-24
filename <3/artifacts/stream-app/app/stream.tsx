@@ -6,7 +6,7 @@ import { editorHistory, makeEditor, remote, sync, type EditorContext } from '../
 import { closeBlock, openFileOrBrowser } from '../lib/block-viewer';
 import { mergeEmbeds } from '../lib/merge-embeds';
 import { identity, setIdentity } from '../lib/identity';
-import type { Reply, Snapshot, StreamEvent } from '../lib/types';
+import type { Reply, Snapshot, StreamEvent, ThreadCard } from '../lib/types';
 
 type Invitation = { source: number; slot: number; follow: boolean; delivering?: boolean };
 const invitationKey = 'stream.reply-invitation';
@@ -24,6 +24,32 @@ export default function Stream() {
   const scrollFrame = useRef(0);
   const [ready, setReady] = useState(false), [notice, setNotice] = useState('');
   const [dragging, setDragging] = useState(false);
+  const [cards, setCards] = useState<ThreadCard[]>([]);
+  const threadAction = useRef(false);
+  async function selectThread(card: ThreadCard, archive = false) {
+    const cm = view.current;
+    if (!cm || threadAction.current) return;
+    threadAction.current = true;
+    try {
+      if (archive) {
+        await call('archiveThread', { threadId: card.id, stopActive: ['running', 'queued'].includes(card.state) });
+        return;
+      }
+      const bounds = cm.scrollDOM.getBoundingClientRect();
+      const visible = Array.from(cm.contentDOM.querySelectorAll<HTMLElement>('.bubble-block.user')).filter(node => {
+        const rect = node.getBoundingClientRect();
+        return rect.bottom > bounds.top && rect.top < bounds.bottom;
+      }).map(node => Number(node.dataset.beat));
+      await flush();
+      const revision = revisions.current.local;
+      const { first, slot } = await call('showThread', { threadId: card.id, visible });
+      if (revision !== revisions.current.local) return;
+      goTo(slot, true, 'nearest');
+      const index = cm.state.field(identity).ids.indexOf(first);
+      if (index >= 0) cm.dispatch({ effects: EditorView.scrollIntoView(cm.state.doc.line(index + 1).from, { y: 'start', yMargin: 48 }) });
+    } catch (e) { error(e); }
+    finally { threadAction.current = false; }
+  }
   const error = (e: unknown) => setNotice(e instanceof Error ? e.message : String(e));
   function apply(snapshot?: Snapshot) {
     const cm = view.current, ctx = context.current; if (!snapshot || !cm || !ctx) return;
@@ -324,6 +350,7 @@ export default function Stream() {
         const { value } = await window.streamAPI!.call('load'); if (disposed) return;
         const snapshot: Snapshot = value.snapshot;
         base.current = snapshot;
+        setCards(value.cards ?? []);
         const ctx: EditorContext = {
           beats: snapshot.beats, byId: new Map(snapshot.beats.map(b => [b.id, b])), initial: { ids: snapshot.beats.map(b => b.id), nextId: snapshot.nextId, retired: snapshot.retired },
           onChange: changed, onSelection: focus, onScroll, entered, leave, link,
@@ -335,6 +362,7 @@ export default function Stream() {
         requestAnimationFrame(() => goTo(view.current!.state.field(identity).ids.at(-1)!, true, 'start'));
         unsubscribe = window.streamAPI!.onEvent(event => {
           if (event.snapshot) apply(event.snapshot);
+          if (event.event === 'open-threads') setCards(event.cards ?? []);
           if (event.event === 'notice') setNotice(event.message || '');
           if (event.event === 'reply-state') void updateReply(event).catch(error);
           if (event.event === 'open-beat' && event.id !== undefined) { goTo(event.id); }
@@ -380,6 +408,18 @@ export default function Stream() {
       void attach([...event.dataTransfer.files]);
     }}>
     <div className="window-drag" aria-hidden="true" />
+    {cards.length > 0 && <nav className="thread-margin" aria-label="Open threads">
+      {cards.map(card => {
+        const active = ['running', 'queued'].includes(card.state);
+        const state = active ? 'working' : card.state;
+        return <div className="thread-row" key={card.id} data-state={state}>
+          <button className="thread-title" title={card.title + ' · ' + card.action}
+            aria-label={card.title + ', ' + card.state.replaceAll('_', ' ')} onClick={() => void selectThread(card)}>{card.title}</button>
+          <button className="archive-thread" aria-label={(active ? 'Stop and archive ' : 'Archive ') + card.title}
+            onClick={() => void selectThread(card, true)}>{active ? 'stop and archive' : 'archive'}</button>
+        </div>;
+      })}
+    </nav>}
     <div ref={host} className="editor-host" onClick={event => { const element = (event.target as HTMLElement).closest<HTMLElement>('[data-beat]'); if (element?.dataset.beat) focus(Number(element.dataset.beat)); }} />
     {!ready && <div className="opening">{notice || 'opening your stream…'}</div>}
     {away && <button type="button" className="return-to-latest" aria-label="Return to latest beat" title="Return to latest beat" onClick={returnToLatest}>↓</button>}

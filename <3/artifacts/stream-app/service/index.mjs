@@ -35,7 +35,7 @@ export async function createService(root, send) {
   }
   const handlers = {
     ...documentActions(store),
-    async load() { await client.sync(); await expandHistoricalChats(store); return { snapshot:store.snapshot(),ui:await readJSON(uiFile,{}) }; },
+    async load() { await client.sync(); await expandHistoricalChats(store); return { snapshot:store.snapshot(), cards: await client.openThreads(),ui:await readJSON(uiFile,{}) }; },
     async snapshot() { return store.snapshot(); },
     async document(args) { return store.saveDocument(args); },
     async resolve({ id }) { return store.resolve(id); },
@@ -49,6 +49,8 @@ export async function createService(root, send) {
     async browser({ url }) { return store.browser(url); },
     async ui(value) { const work = uiQueue.then(() => atomicWrite(uiFile, JSON.stringify(value))); uiQueue = work.catch(() => {}); await work; return true; },
     ...Object.fromEntries(['stop','models','configure','threads','continueThread','reveal'].map(method=>[method,args=>client.control(method,args)])),
+    archiveThread: client.archiveThread,
+    showThread: client.showThread,
     async chat({chatId}) { return client.chat(chatId); },
     async replyState({source}) { return client.state(source); },
     async prompt(args) { return client.prompt(args); },
@@ -68,6 +70,7 @@ export async function createService(root, send) {
     store.polling = true;
     try {
       await client.sync();
+      await client.syncMargin();
       if (await store.checkExternal()) send({ event: 'changed', snapshot: store.snapshot() });
     } catch (e) { send({ event: 'notice', message: e.message }); }
     finally { store.polling = false; }

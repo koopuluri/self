@@ -15,6 +15,72 @@ export async function piClient(store, send) {
     if (!/^[\w-]+$/.test(id)) throw new Error('Invalid chat.');
     return readJSON(path.join(store.pi,'chats',id+'.json'), null);
   };
+  const marginFile = path.join(store.pi, '.runtime/open-threads.json');
+  // Intake can fail before π creates a thread. Keep these errors reachable in
+  // the same margin, including failures recorded by older releases.
+  function failedRequests() {
+    return store.beats.flatMap(({ id }) => {
+      const beat = store.metadata.beats[id];
+      if (!beat.bubble?.failure || beat.failureArchived) return [];
+      return [{ id: 'request-' + id, source: id, title: beat.bubble.text.slice(0, 100) || 'π request',
+        state: 'failed', action: 'read the error', summary: '' }];
+    });
+  }
+  let failures = failedRequests();
+  store.on('changed', () => { failures = failedRequests(); });
+  const openThreads = async () => [...failures, ...await readJSON(marginFile, [])];
+  async function archiveThread({ threadId, stopActive }) {
+    const failed = failures.find(row => row.id === threadId);
+    if (failed) return store.transact(() => { store.metadata.beats[failed.source].failureArchived = true; });
+    return control('archiveThreads', { ids: [threadId], stopActive: stopActive === true });
+  }
+  let previousMargin;
+  async function syncMargin() {
+    const cards = await openThreads();
+    const version = JSON.stringify(cards);
+    if (version !== previousMargin) {
+      previousMargin = version;
+      send({ event: 'open-threads', cards });
+    }
+  }
+  async function showThread({ threadId, visible }) {
+    const card = (await openThreads()).find(t => t.id === threadId);
+    if (!card) throw new Error('This thread is no longer open.');
+    if (card.source !== undefined) {
+      return store.transact(() => {
+        const failed = store.metadata.beats[card.source].bubble;
+        const add = text => store.insertBlock('[π request](https://koopuluri.com/stream/' + card.source + ')', 'bubble', {
+          author: 'π', bubble: { role: 'assistant', source: 'system-status', text } });
+        const reminder = !visible.includes(card.source) && add(card.title);
+        const result = add(failed.failure);
+        return { first: reminder || result, slot: store.beats.at(-1).id };
+      });
+    }
+    const c = await chat(card.chatId);
+    if (!c) throw new Error('The conversation is unavailable.');
+    const lastUser = c.messages.findLastIndex(m => m.role === 'user');
+    const latest = c.messages.findLastIndex(m => m.role === 'assistant' && !m.partial);
+    const active = ['running', 'queued'].includes(card.state);
+    return store.transact(() => {
+      const reference = '[chat with π](../../π/chats/' + c.id + '.md)';
+      const bubble = text => store.insertBlock(reference, 'bubble', { chatId: c.id, author: 'π',
+        bubble: { role: 'assistant', source: 'system-status', text } });
+      const inView = visible.some(id => {
+        const beat = store.metadata.beats[id];
+        return beat?.chatId === c.id && beat.bubble?.role === 'user' && beat.messageIndex === lastUser;
+      });
+      let first;
+      if (!inView) {
+        const reminder = card.summary || c.messages[lastUser]?.text;
+        first = bubble([card.title, reminder !== card.title && reminder].filter(Boolean).join('\n\n'));
+      }
+      const result = !active && latest > lastUser
+        ? placeMessage(store, c, latest, null)
+        : bubble([card.state.replaceAll('_', ' '), card.action].filter(Boolean).join(' · '));
+      store.metadata.beats[result].replyChatId = c.id;
+      return { first: first ?? result, slot: store.beats.at(-1).id };
+    });
+  }
   async function prompt(args) {
     const { sourceBeatId:source, sourceText, text } = args;
     const beat = store.resolve(source).beat;
@@ -55,6 +121,9 @@ export async function piClient(store, send) {
     const context = store.snapshot();
     // The submission snapshot also permits execution after closing the editor.
     context.beats = context.beats.map(({id,text,kind,url,bubble}) => ({id,text,kind,url,bubble}));
+    const position = context.beats.findIndex(b => b.id === source);
+    const previous = position > 0 && store.metadata.beats[context.beats[position - 1].id];
+    if (previous?.replyChatId && text.trim()) args = { ...args, chatId: previous.replyChatId };
     const request = { version:1,id,at:Date.now(),args,context, lastStatus:store.metadata.statusHistory?.at(-1) ?? null };
     await atomicWrite(path.join(box,'in',id+'.json'),JSON.stringify(request));
     if (beat) await store.transact(() => {
@@ -163,5 +232,5 @@ export async function piClient(store, send) {
     }
     throw new Error('π has not answered yet. The request is saved.');
   }
-  return { prompt, state, sync, deliver, chat, control };
+  return { openThreads, archiveThread, showThread, syncMargin, prompt, state, sync, deliver, chat, control };
 }
