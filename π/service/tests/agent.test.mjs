@@ -78,36 +78,6 @@ test('one request can read nine beats and answer from the final tool result', as
   assert.equal(chat.status, 'idle');
 });
 
-test('π can promote the staged release from a conversational request in Main', async t => {
-  const { store, agent } = await fixture(t);
-  const product = path.join(store.root, 'product');
-  const version = 'c2a8f857-5924-4b74-b427-d8f626c85879';
-  const build = path.join(product, 'build');
-  const output = path.join(build, 'releases', version, 'out');
-  await fs.mkdir(output, { recursive: true });
-  await fs.writeFile(path.join(output, 'index.html'), '');
-  await fs.writeFile(path.join(build, 'preview.json'), JSON.stringify({ version }));
-  t.mock.method(agent, 'product', () => product);
-  agent.available = () => true;
-  agent.catalog = {
-    getModel: () => ({}),
-    streamSimple(_model, context) {
-      assert.ok(context.tools.some(tool => tool.name === 'promote_preview'));
-      const last = context.messages.at(-1);
-      const done = last.role === 'toolResult';
-      const content = done ? last.content : [{ type: 'toolCall', id: 'adopt', name: 'promote_preview', arguments: {} }];
-      return {
-        async *[Symbol.asyncIterator]() {},
-        async result() { return { role: 'assistant', content, stopReason: done ? 'stop' : 'toolUse' }; },
-      };
-    },
-  };
-  const id = await agent.prompt({ text: 'Make this the version I open in Main.' });
-  while (agent.running.size || agent.runQueue.length) await new Promise(resolve => setTimeout(resolve, 10));
-  assert.deepEqual(JSON.parse(await fs.readFile(path.join(build, 'stable.json'), 'utf8')), { version });
-  assert.equal((await agent.chat(id)).messages.at(-1).text, 'Main will use release ' + version + ' on its next ordinary launch.');
-});
-
 test('model settings are available through a conversation without credentials', async t => {
   const { agent } = await fixture(t);
   agent.available = () => false;

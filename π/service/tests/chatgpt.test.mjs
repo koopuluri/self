@@ -24,7 +24,7 @@ test('system browser callback verifies state, PKCE and signed identity, persists
   const encode = object => Buffer.from(JSON.stringify(object)).toString('base64url');
   let auth, host, refreshes = 0, wrongNonce = false, revoked = false;
   const args = {
-    directory, appName: 'Stream Preview',
+    directory, appName: 'stream',
     safeStorage: { isEncryptionAvailable: () => true, encryptString: s => Buffer.from(s, 'utf8'), decryptString: b => b.toString('utf8') },
     async openBrowser(target) {
       const url = new URL(target);

@@ -4,7 +4,7 @@ const fs = require('node:fs/promises');
 const { createHash } = require('node:crypto');
 const root = process.env.PI_SELF_ROOT;
 if (!root) throw new Error('Set PI_SELF_ROOT to the workspace.');
-const appName = process.env.PI_STREAM_CHANNEL === 'preview' ? 'Stream Preview' : 'stream';
+const appName = 'stream';
 // Retain the Keychain encryption identity across the service extraction.
 app.setName(appName);
 app.setPath('userData', path.join(root, 'π/.runtime/pi-host-v1'));

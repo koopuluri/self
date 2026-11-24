@@ -22,7 +22,6 @@ export default function Stream() {
   const submissionQueue = useRef(Promise.resolve());
   const awayRef = useRef(false), initialized = useRef(false);
   const scrollFrame = useRef(0);
-  const [preview, setPreview] = useState(false);
   const [ready, setReady] = useState(false), [notice, setNotice] = useState('');
   const [dragging, setDragging] = useState(false);
   const error = (e: unknown) => setNotice(e instanceof Error ? e.message : String(e));
@@ -324,7 +323,6 @@ export default function Stream() {
       try {
         const { value } = await window.streamAPI!.call('load'); if (disposed) return;
         const snapshot: Snapshot = value.snapshot;
-        setPreview(value.channel === 'preview');
         base.current = snapshot;
         const ctx: EditorContext = {
           beats: snapshot.beats, byId: new Map(snapshot.beats.map(b => [b.id, b])), initial: { ids: snapshot.beats.map(b => b.id), nextId: snapshot.nextId, retired: snapshot.retired },
@@ -381,7 +379,6 @@ export default function Stream() {
       event.preventDefault(); event.stopPropagation(); setDragging(false);
       void attach([...event.dataTransfer.files]);
     }}>
-    {preview && <span className="preview-mark">preview</span>}
     <div className="window-drag" aria-hidden="true" />
     <div ref={host} className="editor-host" onClick={event => { const element = (event.target as HTMLElement).closest<HTMLElement>('[data-beat]'); if (element?.dataset.beat) focus(Number(element.dataset.beat)); }} />
     {!ready && <div className="opening">{notice || 'opening your stream…'}</div>}

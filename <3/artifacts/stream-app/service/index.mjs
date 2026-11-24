@@ -13,7 +13,7 @@ const exec = promisify(execFile);
 export async function createService(root, send) {
   const store = await new StreamStore(root).init();
   const uiFile = path.join(store.pi, '.runtime/ui.json');
-  const client = await piClient(store,send,path.resolve(import.meta.dirname,'..'));
+  const client = await piClient(store,send);
   let uiQueue = Promise.resolve();
   store.on('changed', snapshot => send({ event: 'changed', snapshot }));
   store.on('open-beat', id => send({ event: 'open-beat', id }));
@@ -35,7 +35,7 @@ export async function createService(root, send) {
   }
   const handlers = {
     ...documentActions(store),
-    async load() { await client.sync(); await expandHistoricalChats(store); return { channel:process.env.PI_STREAM_CHANNEL || 'stable',snapshot:store.snapshot(),ui:await readJSON(uiFile,{}) }; },
+    async load() { await client.sync(); await expandHistoricalChats(store); return { snapshot:store.snapshot(),ui:await readJSON(uiFile,{}) }; },
     async snapshot() { return store.snapshot(); },
     async document(args) { return store.saveDocument(args); },
     async resolve({ id }) { return store.resolve(id); },

@@ -52,6 +52,8 @@ export async function processMessage(agent, config, text, beats, link, lastStatu
   const taskActions = ['resume','steer','follow-up','abort','review-network'];
   const known = open.some(t => t.id === decision?.threadId);
   const fromStatus = lastStatus?.open.some(t => t.id === decision?.threadId);
+  // Reading a result can archive its thread while the delivered list still names it.
+  if (!known && fromStatus && ['follow-up', 'steer'].includes(decision.action)) decision.action = 'resume';
   if (!decision || ![...taskActions,'new','result','check-in','status-history','open-page'].includes(decision.action)
     || !['easy','medium','hard'].includes(decision.tier) || !Array.isArray(decision.beatIds) || typeof decision.title !== 'string'
     || (taskActions.includes(decision.action) && !known && !(decision.action === 'resume' && fromStatus))) throw new Error('π returned an invalid routing decision.');

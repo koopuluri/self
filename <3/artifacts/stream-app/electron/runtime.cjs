@@ -5,7 +5,7 @@ const { pathToFileURL } = require('node:url');
 const root = process.env.PI_SELF_ROOT || path.resolve(__dirname, '../../../..');
 const product = path.resolve(__dirname, '..');
 const out = process.env.PI_STREAM_OUT || path.join(product, 'out');
-const appName = process.env.PI_STREAM_CHANNEL === 'preview' ? 'Stream Preview' : 'stream';
+const appName = 'stream';
 app.setName(appName);
 app.setPath('userData', path.join(root, 'π/.runtime/electron'));
 if (!app.requestSingleInstanceLock()) { app.quit(); return; }
@@ -99,7 +99,6 @@ app.whenReady().then(async () => {
   }).then(local => { service = local; });
   await ready;
   window = new BrowserWindow({ width: 1100, height: 850, minWidth: 650, minHeight: 480, title: appName, backgroundColor: '#fdfdfc', titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 18, y: 19 }, webPreferences: { preload: path.join(__dirname, 'preload.cjs'), webviewTag: true, nodeIntegration: false, contextIsolation: true, sandbox: true } });
-  if (process.env.PI_STREAM_CHANNEL === 'preview') window.on('page-title-updated', event => event.preventDefault());
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.on('render-process-gone', () => { rendererReady = false; });

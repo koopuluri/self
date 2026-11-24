@@ -28,12 +28,9 @@ function profile(root, source, temp, node, check, network) {
   const hidden = '(regex #"/([.]git-credentials|[.]netrc|[.]npmrc|[.]ssh|[.]aws|[.]codex|[.]gnupg|[.]env([.][^/]*)?)(/|$)|[.](pem|key)$")';
   const piSource = path.resolve(source,'../../../π/service');
   const privateData = ['π/.runtime', 'π/chats', 'π/threads', 'π/logs'].map(p => subtree(path.join(root, p)));
-  // The Preview workspace itself lives under source/.runtime.
   const runtime = path.join(source, '.runtime');
-  const siblingData = within(runtime, root)
-    ? '(require-all ' + subtree(runtime) + ' (require-not ' + subtree(root) + '))' : subtree(runtime);
   const build = path.join(source, 'build');
-  const exportDir = path.join(build, 'preview-export');
+  const exportDir = path.join(build, 'export');
   const protectedWrites = ['<3/stream.md', '<3/stream', 'π/config.json', '.agents'].map(p => subtree(path.join(root, p)));
   protectedWrites.push('(regex #"/([.]git|node_modules)(/|$)")', '(require-all ' + subtree(build) + ' (require-not ' + subtree(exportDir) + '))');
   return [
@@ -41,10 +38,9 @@ function profile(root, source, temp, node, check, network) {
     '(allow process-exec* process-fork)', '(allow signal (target same-sandbox))',
     '(allow file-read-metadata)',
     '(allow file-read* file-map-executable ' + [...system, runtimeRoot, root, source, piSource, temp, path.resolve(source,'../../../π/functions'), '/private/etc', path.resolve(source,'../personal-site/app/workspace-fonts.css'), path.resolve(source,'../personal-site/fonts')].map(subtree).join(' ') + ')',
-    // Preview checks use shared instructions, not a copy in the Preview data root.
     '(allow file-read-data ' + literal(path.resolve(source, '../../../AGENTS.md')) + ')',
     '(allow file-write* ' + [root, source, piSource, temp].map(subtree).join(' ') + ')',
-    '(deny file-read-data file-map-executable file-write* ' + [hidden, siblingData, ...privateData].join(' ') + ')',
+    '(deny file-read-data file-map-executable file-write* ' + [hidden, subtree(runtime), ...privateData].join(' ') + ')',
     '(deny file-write* ' + protectedWrites.join(' ') + ')',
     '(deny file-write-unlink ' + [root, source, build, path.join(root,'π'), path.join(root,'<3'), runtime].map(literal).join(' ') + ')',
     ...(network ? ['(allow network-outbound (remote ip "*:*"))', '(allow mach-lookup (global-name "com.apple.mDNSResponder") (global-name "com.apple.SystemConfiguration.configd"))'] : []),

@@ -121,7 +121,6 @@ a[href]:is(:hover,:focus-visible) { color: #2058af; text-decoration-color: curre
 *:hover::-webkit-scrollbar-thumb { background: #d7d9d0; }
 @media (max-width: 768px) { .editor-host > .cm-editor > .cm-scroller > .cm-content { padding-top: 48px; padding-inline: 24px; } }
 
-.preview-mark { position: fixed; z-index: 4; top: 12px; left: 88px; font-size: 11px; color: var(--muted); pointer-events: none; user-select: none; }
 .block-preview { display: flex; align-items: center; gap: var(--space-detail); width: 100%; text-align: left; padding: 8px 12px; }
 .block-icon { color: var(--muted); }
 .block-path, .block-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

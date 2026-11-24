@@ -12,7 +12,6 @@ import { observeModelFetch } from './model-diagnostics.mjs';
 class Context extends StreamStore {
   use(request, receipts) {
     this.requestId = request.id;
-    this.clientRelease = request.release;
     const { beats, nextId, retired } = request.context;
     this.beats = beats.map(({ id, text }) => ({ id, text }));
     this.metadata = { ...receipts, nextId, beats: Object.fromEntries(beats.map(b => [b.id, { ...b }])) };

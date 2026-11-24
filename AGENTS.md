@@ -17,7 +17,7 @@ Keep self as the Obsidian vault root. `.obsidianignore` excludes dependencies an
 
 ## Stream development
 
-Keep the writer's Stream session running during development. Build and test in Stream Preview with its separate data root. Promote a tested release when the user wants to adopt it; the writing app picks it up on its next ordinary launch. See `<3/artifacts/stream-app/README.md`.
+Develop directly in Stream with one workspace and one π service. Keep the writer's session running. Test against temporary fixtures and build for the next ordinary launch. See `<3/artifacts/stream-app/README.md`.
 
 ## π — personal artificial intelligence
 

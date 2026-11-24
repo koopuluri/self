@@ -8,7 +8,7 @@ import { reportText } from './report-text.mjs';
 
 import { readWorkspaceDocument } from './documents.mjs';
 
-export async function piClient(store, send, release) {
+export async function piClient(store, send) {
   const box = path.join(store.pi,'.runtime/mailbox-v1');
   for (const dir of ['in','out','running','applied']) await fs.mkdir(path.join(box,dir), {recursive:true});
   const chat = id => {
@@ -55,7 +55,7 @@ export async function piClient(store, send, release) {
     const context = store.snapshot();
     // The submission snapshot also permits execution after closing the editor.
     context.beats = context.beats.map(({id,text,kind,url,bubble}) => ({id,text,kind,url,bubble}));
-    const request = { version:1,id,at:Date.now(),args,context,release, lastStatus:store.metadata.statusHistory?.at(-1) ?? null };
+    const request = { version:1,id,at:Date.now(),args,context, lastStatus:store.metadata.statusHistory?.at(-1) ?? null };
     await atomicWrite(path.join(box,'in',id+'.json'),JSON.stringify(request));
     if (beat) await store.transact(() => {
       if (store.beat(source)?.text === sourceText) Object.assign(store.metadata.beats[source],
@@ -153,7 +153,7 @@ export async function piClient(store, send, release) {
   }
   async function control(method,args={}) {
     const id = randomUUID(), file=id+'.json';
-    await atomicWrite(path.join(box,'in',file),JSON.stringify({version:1,id,at:Date.now(),method,args,context:store.snapshot(),release}));
+    await atomicWrite(path.join(box,'in',file),JSON.stringify({version:1,id,at:Date.now(),method,args,context:store.snapshot()}));
     const start = Date.now();
     while (Date.now()-start<115000) {
       const result = await readJSON(path.join(box,'applied',file),null);

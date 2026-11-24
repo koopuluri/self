@@ -78,6 +78,35 @@ test('router selects an open thread across writing beats; organizer holds the re
   assert.ok(calls.every(c => c.traceId && c.request && c.response));
 });
 
+test('a follow-up to a just-read result reopens its thread with the earlier answer', async t => {
+  const { agent, store } = await fixture(t);
+  let target, continuation;
+  useMock(agent, context => {
+    if (context.systemPrompt.includes('name: process-message')) {
+      const data = JSON.parse(context.messages[0].content);
+      if (!target) return route(data, 'new');
+      assert.equal(data.lastStatus.open[0].id, target);
+      return route(data, data.message === '1' ? 'result' : 'follow-up', target);
+    }
+    if (context.systemPrompt.includes('name: update-thread')) return organize(JSON.parse(context.messages[0].content));
+    if (!target) return answer('1. keep the original words');
+    continuation = context.messages;
+    return answer('revised list');
+  });
+  const first = await send(agent, store, 'list principles');
+  await idle(agent);
+  target = first.threadId;
+  await send(agent, store, '');
+  await send(agent, store, '1');
+  assert.equal((await agent.thread(target)).lifecycle, 'archived');
+  const next = await send(agent, store, 'revise that list using my words');
+  await idle(agent);
+  assert.equal(next.id, first.id);
+  assert.equal((await agent.thread(target)).lifecycle, 'open');
+  assert.ok(continuation.some(m => m.role === 'assistant' && m.content.some(b => b.text === '1. keep the original words')));
+  assert.equal(continuation.at(-1).content, 'revise that list using my words');
+});
+
 test('each call reads fresh workspace guidance before its own system instructions', async t => {
   const { agent, store } = await fixture(t);
   agent.instructionsFile = path.join(store.root, 'AGENTS.md');

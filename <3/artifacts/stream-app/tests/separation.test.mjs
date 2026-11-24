@@ -15,7 +15,7 @@ async function wait(check) {
 test('a queued request survives a closed editor, client replacement and a worker restart', async t => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(),'self-separation-'));
   t.after(()=>fs.rm(root,{recursive:true,force:true}));
-  let store=await new StreamStore(root).init(), client=await piClient(store,()=>{},'/preview/a');
+  let store=await new StreamStore(root).init(), client=await piClient(store,()=>{});
   const source=await store.append('/current model');
   const slot=store.beats.at(-1).id;
   const args={bubble:true,text:'current model',sourceText:'/current model',sourceBeatId:source,slot};
@@ -28,7 +28,7 @@ test('a queued request survives a closed editor, client replacement and a worker
   const out=path.join(root,'π/.runtime/mailbox-v1/out',id+'.json');
   await wait(()=>fs.stat(out).catch(()=>false));
   work.close();
-  store=await new StreamStore(root).init(); client=await piClient(store,()=>{},'/preview/b');
+  store=await new StreamStore(root).init(); client=await piClient(store,()=>{});
   await client.sync();
   const c=await client.chat(store.metadata.beats[source].chatId);
   assert.match(c.messages.at(-1).text,/current model/i);
@@ -54,7 +54,7 @@ test('opening a document records its path, and stale saves preserve the newer fi
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const store = await new StreamStore(root).init();
   const { documentActions, readWorkspaceDocument } = await import('../service/documents.mjs');
-  const client = await piClient(store, () => {}, '/preview');
+  const client = await piClient(store, () => {});
   const name = '<3/artifacts/words with spaces.md';
   const file = path.join(root, name);
   await fs.mkdir(path.dirname(file), { recursive: true });
