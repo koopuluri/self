@@ -3,6 +3,7 @@ import { Decoration, DecorationSet, EditorView, WidgetType, ViewPlugin, keymap }
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { search, searchKeymap } from '@codemirror/search';
 import { deletePassages, identity, movePassage, setIdentity, trackIdentity, undoIdentity, type Identity } from './identity';
+import { guardStreamSelection } from './beat-selection';
 import { beatClock } from './beat-clock';
 import { openImage } from './media-viewer';
 import { linkSpans, messageBody } from './chat-format';
@@ -162,7 +163,7 @@ export function makeEditor(parent: HTMLElement, ctx: EditorContext) {
   });
   const view = new EditorView({ parent, state: EditorState.create({
     doc: ctx.beats.map(b => b.text).join('\n'),
-    extensions: [identity.init(() => ctx.initial), trackIdentity, undoIdentity, widgets, lines, protectBlocks, EditorView.lineWrapping, editorHistory.of(history()), search({ top: true }),
+    extensions: [identity.init(() => ctx.initial), trackIdentity, undoIdentity, widgets, lines, protectBlocks, guardStreamSelection, EditorView.lineWrapping, editorHistory.of(history()), search({ top: true }),
       EditorView.clipboardOutputFilter.of(normalizePastedText),
       EditorView.domEventHandlers({ click(event) {
         const link = (event.target as Element).closest<HTMLAnchorElement>('a.beat-link');

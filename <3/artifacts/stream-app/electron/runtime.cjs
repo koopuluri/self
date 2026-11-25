@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session, ipcMain, protocol, net, dialog, shell, Menu, clipboard } = require('electron');
+const { app, BrowserWindow, session, ipcMain, protocol, net, dialog, shell, Menu, clipboard, webContents } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
@@ -128,7 +128,18 @@ app.whenReady().then(async () => {
     if (Number.isSafeInteger(id) && id >= 0) clipboard.writeText(`https://koopuluri.com/stream/${id}`);
   });
   ipcMain.handle('stream:open-asset', async (event, id) => { trusted(event); const asset = snapshot?.beats.find(b => b.id === id)?.asset; if (!asset) throw new Error('Unknown asset'); return shell.openPath(path.resolve(root, asset.path)); });
-  Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: 'stream', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'quit' }] }, { role: 'editMenu' }, { label: 'view', submenu: [{ role: 'reload' }, { role: 'toggleDevTools' }, { role: 'togglefullscreen' }] }]));
+  Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: 'stream', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'quit' }] }, { label: 'Edit', submenu: [
+    { role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' },
+    { role: 'pasteAndMatchStyle' }, { role: 'delete' },
+    { label: 'Select All', accelerator: 'CommandOrControl+A', click() {
+      const focused = webContents.getFocusedWebContents();
+      if (focused === window.webContents) notify({ event: 'select-all' });
+      else focused?.selectAll(); // Browser guest or DevTools, not the stream.
+    } },
+    ...(process.platform === 'darwin' ? [{ type: 'separator' }, { label: 'Substitutions', submenu: [
+      { role: 'showSubstitutions' }, { type: 'separator' }, { role: 'toggleSmartQuotes' }, { role: 'toggleSmartDashes' }, { role: 'toggleTextReplacement' },
+    ] }, { label: 'Speech', submenu: [{ role: 'startSpeaking' }, { role: 'stopSpeaking' }] }] : []),
+  ] }, { label: 'view', submenu: [{ role: 'reload' }, { role: 'toggleDevTools' }, { role: 'togglefullscreen' }] }]));
   await window.loadURL(process.env.PI_STREAM_URL || 'stream://app/');
   if (process.argv.includes('--connect-chatgpt')) startChatGPTSignIn();
 }).catch(error => { dialog.showErrorBox(appName, error.message); app.quit(); });

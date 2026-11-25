@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "nextId": 1905,
+  "nextId": 1917,
   "beats": {
     "0": {
       "kind": "text",
@@ -30380,6 +30380,10 @@
         {
           "enteredAt": "2026-11-25T04:03:47.838Z",
           "exitedAt": "2026-11-25T04:04:37.799Z"
+        },
+        {
+          "enteredAt": "2026-11-25T04:11:20.593Z",
+          "exitedAt": "2026-11-25T04:11:21.595Z"
         }
       ],
       "updatedAt": "2026-11-25T04:04:37.813Z",
@@ -30421,6 +30425,10 @@
         {
           "enteredAt": "2026-11-25T04:05:22.379Z",
           "exitedAt": "2026-11-25T04:05:22.772Z"
+        },
+        {
+          "enteredAt": "2026-11-25T04:11:21.595Z",
+          "exitedAt": "2026-11-25T04:11:23.061Z"
         }
       ],
       "updatedAt": "2026-11-25T04:05:14.493Z"
@@ -30558,14 +30566,237 @@
       "kind": "text",
       "author": "user",
       "createdAt": "2026-11-25T04:07:32.143Z",
-      "completedAt": null,
+      "completedAt": "2026-11-25T04:08:20.967Z",
       "visits": [
         {
           "enteredAt": "2026-11-25T04:07:31.582Z",
-          "exitedAt": null
+          "exitedAt": "2026-11-25T04:08:20.878Z"
+        },
+        {
+          "enteredAt": "2026-11-25T04:08:21.015Z",
+          "exitedAt": "2026-11-25T04:08:21.026Z"
+        },
+        {
+          "enteredAt": "2026-11-25T04:11:23.061Z",
+          "exitedAt": "2026-11-25T04:11:24.694Z"
         }
       ],
       "updatedAt": "2026-11-25T04:07:49.692Z"
+    },
+    "1905": {
+      "kind": "bubble",
+      "author": "π",
+      "createdAt": "2026-11-25T04:08:20.967Z",
+      "completedAt": "2026-11-25T04:08:20.967Z",
+      "visits": [],
+      "chatId": "e6e46df3-deae-446f-bf97-cbbbc3380c23",
+      "messageIndex": 1,
+      "bubble": {
+        "role": "assistant",
+        "text": "committed and pushed every repo change to `origin/main`, including the stream edit made during the first push. the working tree was clean after the second push.\n\n- `9caf7f5` — `refine stream scrolling and thread controls and save history`\n- `677f55c` — `save latest stream beat`"
+      },
+      "appearedAt": "2026-11-25T04:08:15.282Z",
+      "replyChatId": "e6e46df3-deae-446f-bf97-cbbbc3380c23"
+    },
+    "1906": {
+      "kind": "text",
+      "author": "user",
+      "createdAt": "2026-11-25T04:10:19.641Z",
+      "completedAt": "2026-11-25T04:10:48.230Z",
+      "visits": [
+        {
+          "enteredAt": "2026-11-25T04:08:21.026Z",
+          "exitedAt": "2026-11-25T04:08:28.663Z"
+        },
+        {
+          "enteredAt": "2026-11-25T04:08:30.047Z",
+          "exitedAt": "2026-11-25T04:10:20.847Z"
+        },
+        {
+          "enteredAt": "2026-11-25T04:10:22.202Z",
+          "exitedAt": "2026-11-25T04:10:47.869Z"
+        },
+        {
+          "enteredAt": "2026-11-25T04:10:49.748Z",
+          "exitedAt": "2026-11-25T04:10:59.236Z"
+        },
+        {
+          "enteredAt": "2026-11-25T04:11:18.946Z",
+          "exitedAt": "2026-11-25T04:11:20.593Z"
+        }
+      ],
+      "updatedAt": "2026-11-25T04:10:57.823Z"
+    },
+    "1907": {
+      "kind": "bubble",
+      "author": "π",
+      "createdAt": "2026-11-25T04:08:29.999Z",
+      "completedAt": "2026-11-25T04:08:29.999Z",
+      "visits": [],
+      "chatId": "be2b05ba-1034-4f17-b287-b9080088fca3",
+      "bubble": {
+        "role": "assistant",
+        "source": "system-status",
+        "text": "running · nothing needed yet"
+      },
+      "replyChatId": "be2b05ba-1034-4f17-b287-b9080088fca3"
+    },
+    "1908": {
+      "kind": "text",
+      "author": "user",
+      "createdAt": null,
+      "completedAt": null,
+      "visits": [],
+      "updatedAt": "2026-11-25T04:10:48.230Z",
+      "redirect": 1906
+    },
+    "1909": {
+      "kind": "text",
+      "author": "user",
+      "createdAt": "2026-11-25T04:11:00.350Z",
+      "completedAt": "2026-11-25T04:11:03.000Z",
+      "visits": [
+        {
+          "enteredAt": "2026-11-25T04:10:59.816Z",
+          "exitedAt": "2026-11-25T04:11:02.927Z"
+        },
+        {
+          "enteredAt": "2026-11-25T04:11:03.042Z",
+          "exitedAt": "2026-11-25T04:11:03.053Z"
+        }
+      ],
+      "updatedAt": "2026-11-25T04:11:00.350Z"
+    },
+    "1910": {
+      "kind": "bubble",
+      "author": "π",
+      "createdAt": "2026-11-25T04:11:03.000Z",
+      "completedAt": "2026-11-25T04:11:03.000Z",
+      "visits": [
+        {
+          "enteredAt": "2026-11-25T04:11:17.410Z",
+          "exitedAt": "2026-11-25T04:11:18.946Z"
+        }
+      ],
+      "chatId": "be2b05ba-1034-4f17-b287-b9080088fca3",
+      "bubble": {
+        "role": "assistant",
+        "source": "thread-recap",
+        "text": "limit stream’s select all to the current beat recapped: you wanted Select All, no matter how you trigger it, to select only the current beat so you can’t accidentally delete the entire Stream."
+      }
+    },
+    "1911": {
+      "kind": "text",
+      "author": "user",
+      "createdAt": "2026-11-25T04:11:14.347Z",
+      "completedAt": "2026-11-25T04:11:31.048Z",
+      "visits": [
+        {
+          "enteredAt": "2026-11-25T04:11:03.053Z",
+          "exitedAt": "2026-11-25T04:11:09.480Z"
+        },
+        {
+          "enteredAt": "2026-11-25T04:11:11.089Z",
+          "exitedAt": "2026-11-25T04:11:15.779Z"
+        },
+        {
+          "enteredAt": "2026-11-25T04:11:24.694Z",
+          "exitedAt": "2026-11-25T04:11:29.945Z"
+        }
+      ],
+      "updatedAt": "2026-11-25T04:11:31.048Z"
+    },
+    "1912": {
+      "kind": "bubble",
+      "author": "π",
+      "createdAt": "2026-11-25T04:11:03.000Z",
+      "completedAt": "2026-11-25T04:11:03.000Z",
+      "visits": [
+        {
+          "enteredAt": "2026-11-25T04:11:15.779Z",
+          "exitedAt": "2026-11-25T04:11:17.410Z"
+        }
+      ],
+      "chatId": "be2b05ba-1034-4f17-b287-b9080088fca3",
+      "messageIndex": 1,
+      "bubble": {
+        "role": "assistant",
+        "text": "after you quit and reopen Stream, ⌘A, Ctrl+A, and Edit → Select All will select only the current beat. pressing Select All again won’t expand the selection. i tested all three and verified that deleting the selected beat leaves its neighbors intact."
+      },
+      "appearedAt": "2026-11-25T04:10:31.518Z",
+      "replyChatId": "be2b05ba-1034-4f17-b287-b9080088fca3"
+    },
+    "1913": {
+      "kind": "bubble",
+      "author": "user",
+      "createdAt": "2026-11-25T04:11:31.048Z",
+      "completedAt": "2026-11-25T04:11:33.387Z",
+      "visits": [
+        {
+          "enteredAt": "2026-11-25T04:11:32.450Z",
+          "exitedAt": "2026-11-25T04:11:33.371Z"
+        }
+      ],
+      "updatedAt": "2026-11-25T04:11:33.034Z",
+      "requestId": "beat-1913",
+      "bubble": {
+        "role": "user",
+        "text": "archive"
+      },
+      "chatId": "be2b05ba-1034-4f17-b287-b9080088fca3",
+      "messageIndex": 2,
+      "appearedAt": "2026-11-25T04:11:33.521Z",
+      "appliedRequest": "beat-1913"
+    },
+    "1914": {
+      "kind": "bubble",
+      "author": "user",
+      "createdAt": "2026-11-25T04:11:40.025Z",
+      "completedAt": "2026-11-25T04:11:48.126Z",
+      "visits": [
+        {
+          "enteredAt": "2026-11-25T04:11:33.604Z",
+          "exitedAt": "2026-11-25T04:11:48.110Z"
+        }
+      ],
+      "updatedAt": "2026-11-25T04:11:48.126Z",
+      "requestId": "beat-1914",
+      "bubble": {
+        "role": "user",
+        "text": "commit and push all open stuff"
+      },
+      "chatId": "9a758f27-3bdc-4af9-8ef6-f91398c07624",
+      "messageIndex": 0,
+      "appearedAt": "2026-11-25T04:11:50.669Z",
+      "appliedRequest": "beat-1914"
+    },
+    "1915": {
+      "kind": "bubble",
+      "author": "π",
+      "createdAt": "2026-11-25T04:11:33.566Z",
+      "completedAt": "2026-11-25T04:11:33.566Z",
+      "visits": [],
+      "chatId": "be2b05ba-1034-4f17-b287-b9080088fca3",
+      "messageIndex": 3,
+      "bubble": {
+        "role": "assistant",
+        "text": "archived: limit Stream’s Select All to the current beat",
+        "source": "archive-receipt"
+      },
+      "appearedAt": "2026-11-25T04:11:33.521Z"
+    },
+    "1916": {
+      "kind": "text",
+      "author": "user",
+      "createdAt": "2026-11-25T04:11:54.706Z",
+      "completedAt": null,
+      "visits": [
+        {
+          "enteredAt": "2026-11-25T04:11:53.738Z",
+          "exitedAt": null
+        }
+      ],
+      "updatedAt": "2026-11-25T04:12:16.324Z"
     }
   }
 }

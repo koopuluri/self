@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react'
 import { history } from '@codemirror/commands';
 import { EditorView } from '@codemirror/view';
 import { editorHistory, makeEditor, remote, sync, type EditorContext } from '../lib/editor';
+import { streamSelectAll } from '../lib/beat-selection';
 import { closeBlock, openFileOrBrowser } from '../lib/block-viewer';
 import { mergeEmbeds } from '../lib/merge-embeds';
 import { identity, setIdentity } from '../lib/identity';
@@ -432,6 +433,7 @@ export default function Stream() {
         requestAnimationFrame(() => goTo(view.current!.state.field(identity).ids.at(-1)!, true, 'start'));
         unsubscribe = window.streamAPI!.onEvent(event => {
           if (event.snapshot) apply(event.snapshot);
+          if (event.event === 'select-all' && !streamSelectAll(view.current)) document.execCommand('selectAll');
           if (event.event === 'open-threads') dispatchRows({ type: 'sync', cards: event.cards ?? [] });
           if (event.event === 'notice') setNotice(event.message || '');
           if (event.event === 'reply-state') void updateReply(event).catch(error);
@@ -453,6 +455,12 @@ export default function Stream() {
         }
       } catch (e) { error(e); }
     })();
+    const onSelectAll = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a' && streamSelectAll(view.current)) {
+        event.preventDefault(); event.stopPropagation();
+      }
+    };
+    window.addEventListener('keydown', onSelectAll, true);
     const beforeUnload = (event: BeforeUnloadEvent) => { if (revisions.current.local !== revisions.current.saved) { event.preventDefault(); void flush().catch(() => {}); } };
     window.addEventListener('beforeunload', beforeUnload); window.addEventListener('resize', onScroll);
     const interrupts = ['wheel', 'pointerdown', 'touchstart', 'keydown'] as const;
@@ -468,6 +476,7 @@ export default function Stream() {
     return () => {
       cancelReturn();
       for (const type of interrupts) window.removeEventListener(type, interrupt, true);
+      window.removeEventListener('keydown', onSelectAll, true);
       disposed = true; cancelAnimationFrame(scrollFrame.current); scrollFrame.current = 0; unsubscribe?.(); view.current?.destroy(); window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('resize', onScroll); initialized.current = false; };
   }, []);
 

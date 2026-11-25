@@ -83,3 +83,23 @@ test('a reply appended during typing preserves the new empty writing beat and un
   assert.deepEqual(merged.identity.origins, { 13: 10 });
   assert.equal(mergeEmbeds(base, { ...remote, beats: [...base.beats, reply, { ...slot, text: 'external writing' }] }, local, text), null);
 });
+
+test('Select All cannot grow beyond the current beat or delete its neighbors', async () => {
+  const { guardStreamSelection, selectCurrentBeat } = await import('../lib/beat-selection.ts');
+  for (const text of ['a wrapped passage', '/multiple\u2028draft lines', '']) {
+    let state = EditorState.create({ doc: `before\n${text}\nafter`, extensions: [guardStreamSelection,
+      identity.init(() => ({ ids: [10, 11, 12], nextId: 13, retired: {} })), trackIdentity] });
+    const view = { get state() { return state; }, dispatch(spec) { state = state.update(spec).state; } };
+    const { from, to } = state.doc.line(2);
+    view.dispatch({ selection: { anchor: state.doc.length, head: from } });
+    for (const select of [selectCurrentBeat, selectCurrentBeat, () => view.dispatch({ selection: { anchor: state.doc.length, head: 0 } })]) {
+      select(view);
+      assert.deepEqual([state.selection.main.from, state.selection.main.to], [from, to]);
+    }
+    if (text) {
+      deletePassages(view);
+      assert.equal(state.doc.toString(), 'before\nafter');
+      assert.deepEqual(state.field(identity).ids, [10, 12]);
+    }
+  }
+});
