@@ -149,7 +149,8 @@ a[href]:is(:where([data-pointer]) :hover,:focus-visible) { color: #2058af; text-
   display: flex; align-items: center; gap: var(--space-detail); height: 32px; padding-inline: 6px;
 }
 .thread-summary { font-variant-numeric: tabular-nums; pointer-events: none; }
-.routing-row { justify-content: flex-end; padding-right: 10px; }
+.routing-row { justify-content: space-between; height: auto; min-height: 32px; padding-right: 10px; line-height: 14px; }
+.routing-row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
 :where([data-pointer]) .thread-margin:hover .thread-list, .thread-margin:has(:focus-visible) .thread-list { opacity: 1; pointer-events: auto; }
 :where([data-pointer]) .thread-margin:hover .thread-summary, .thread-margin:has(:focus-visible) .thread-summary { opacity: 0; }
 @media (prefers-reduced-motion: no-preference) {

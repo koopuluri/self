@@ -13,7 +13,10 @@ type Invitation = { source: number; slot: number; follow: boolean; delivering?: 
 const invitationKey = 'stream.reply-invitation';
 
 function RoutingRow() {
-  return <div className="routing-row" role="status" aria-label="Routing message"><span className="thread-spinner" /></div>;
+  return <div className="routing-row" role="status">
+    <span>deciding if new / existing thread...</span>
+    <span className="thread-spinner" aria-hidden="true" />
+  </div>;
 }
 
 // Only fade a title when it actually runs out of room, including on hover.
