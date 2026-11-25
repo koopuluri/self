@@ -18,6 +18,21 @@ import { atomicWrite, readJSON, stamp } from './io.mjs';
 import { attachMessage, pendingReplies, placeMessage, recentPages, routePage } from './bubbles.mjs';
 
 
+// Match a whole request. Only an explicit all/every target gets bulk scope.
+const archiveVerb = '(?:close(?: out)?|archive)';
+const archiveObject = '(?:it|this|that|(?:this|that) one|(?:(?:this|that|the|my|our) )?(?:(?:current|active|selected|focused|open) )?(?:thread|chat|conversation))';
+const pluralThread = '(?:open )?(?:threads|chats|conversations)';
+const allObjects = `(?:all(?: (?:of )?them| (?:of )?(?:(?:the|my|our|these|those) )?${pluralThread})?|every (?:single )?(?:open )?(?:thread|chat|conversation)|(?:them|${pluralThread}) all)`;
+const archiveRequest = new RegExp(`^${archiveVerb}(?: */ *${archiveVerb})?(?: (?:(?<all>${allObjects})|${archiveObject}))?(?: (?:for me|now))?$`);
+export function archiveScope(text) {
+  const phrase = text.trim().toLowerCase().replaceAll('’', "'").replace(/\s+/g, ' ')
+    .replace(/[.!?]+$/, '').trimEnd()
+    .replace(/^(?:(?:ok(?:ay)?|please|pls|go ahead and|(?:can|could|would|will) you|let's)[, ]+)+/, '')
+    .replace(/(?:[, ]+(?:please|pls|thanks|thank you))+$/, '');
+  const match = archiveRequest.exec(phrase);
+  return !match ? null : match.groups.all ? 'all' : 'one';
+}
+
 const schema = (properties, required = Object.keys(properties)) => ({ type: 'object', properties, required, additionalProperties: false });
 const string = { type: 'string' }, integer = { type: 'integer', minimum: 0 };
 const effortLevels = ['default', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
@@ -55,6 +70,8 @@ function toolActivity(name, args) {
     default: return 'Updating model…';
   }
 }
+class ActiveArchiveError extends Error {}
+
 export class Coordinator {
   get store() { return this.requestContext.getStore() ?? this.workspace; }
   constructor(store, plan) {
@@ -230,20 +247,18 @@ export class Coordinator {
     }
     return true;
   }
-  async archiveThreads(ids, stopActive = true, click) {
+  async archiveThreads(ids, click, source = 'left-pane') {
     const archived = [];
     for (const id of ids) {
       const thread = await this.thread(id);
       if (thread.lifecycle === 'archived') continue;
-      if (!stopActive && ['running', 'queued'].includes(thread.status)) throw new Error('This thread is now running. Choose stop and archive.');
-      const stoppedRun = await this.stop(thread.chatId);
-      // The run's final save must finish before archiving its session.
-      while (this.running.has(id)) await new Promise(resolve => setTimeout(resolve, 25));
-      if (thread.lifecycle === 'archived') continue;
-      recordArchive(thread, this.store.root, { threadId: id, actor: 'writer', source: 'left-pane',
+      // Check the live job too: its final save may still be in flight.
+      if (['running', 'queued'].includes(thread.status) || this.jobs.has(thread.chatId) || this.running.has(id))
+        throw new ActiveArchiveError('This thread is active and was not archived. Choose stop on its row to stop it instead.');
+      recordArchive(thread, this.store.root, { threadId: id, actor: 'writer', source,
         at: click?.at ?? stamp(), runStateAtClick: click?.runStateAtClick ?? null,
         focusedBeatId: click?.focusedBeatId ?? null,
-        action: stopActive ? 'stop-and-archive' : 'archive', stoppedRun });
+        action: 'archive', stoppedRun: false });
       thread.lifecycle = 'archived';
       delete thread.inbox;
       delete thread.closeAfterRead;
@@ -361,6 +376,27 @@ export class Coordinator {
     await this.saveChat(chat);
     if (slot == null) await this.deliver(chat.id, chat.sourceBeatId);
   }
+  async standaloneArchiveReceipt(title, receipt, text, link, bubble) {
+    // Don't disturb an active job's transcript or outstanding reply invitation.
+    const thread = { id: randomUUID(), title, status: 'idle', lifecycle: 'archived',
+      createdAt: stamp(), sourceBeatId: link.sourceBeatId, messages: [] };
+    const chat = this.newChat(thread);
+    const id = await this.archiveReceipt(chat, receipt, text, link, bubble);
+    await this.saveThread(thread);
+    return id;
+  }
+  async archiveReceipt(chat, receipt, text, { traceId, sourceBeatId }, bubble) {
+    const i = chat.messages.length;
+    chat.messages.push({ role: 'user', text, at: stamp(), traceId, sourceBeatId },
+      { role: 'assistant', source: 'archive-receipt', traceId, at: stamp(), text: receipt });
+    delete chat.displaySourceId;
+    await this.saveChat(chat);
+    if (bubble) await this.store.transact(() => {
+      attachMessage(this.store, sourceBeatId, chat, i);
+      placeMessage(this.store, chat, i + 1, sourceBeatId);
+    });
+    return chat.id;
+  }
   async submit({ chatId, text, contextBeatId, sourceBeatId, sourceText, slot, bubble = false, rows, lastStatus }) {
     await this.initialized;
     if (typeof text !== 'string' || (!bubble && !text.trim())) return null;
@@ -375,6 +411,51 @@ export class Coordinator {
     const redact = /^\s*(unredact|redact)\s+(?:beat\s*)?(?:#?(\d+)|this|that)(?:\s+beat)?[.!]?\s*$/i.exec(text);
     let control = null, route;
     if (bubble && (this.store.beat(sourceBeatId)?.text !== sourceText || this.store.metadata.beats[sourceBeatId]?.kind !== 'text')) throw new Error('The submitted beat has changed.');
+    // A direct close is a lifecycle command, never a task for the target
+    // to execute on itself. The receipt comes from the archive operation.
+    const scope = archiveScope(text);
+    if (scope === 'all') {
+      const open = (await this.threads()).filter(t => t.lifecycle !== 'archived');
+      const results = await Promise.allSettled(open.map(t => this.archiveThreads([t.id],
+        { focusedBeatId: sourceBeatId, runStateAtClick: t.status }, 'stream-command')));
+      const archived = [], active = [], failed = [];
+      results.forEach((result, i) => {
+        const title = open[i].title || 'untitled thread';
+        if (result.status === 'rejected' && result.reason instanceof ActiveArchiveError) active.push(title);
+        else if (result.status === 'rejected') failed.push(`${title}: ${result.reason?.message || 'archive failed'}`);
+        else if (result.value.length) archived.push(title);
+      });
+      const sections = [];
+      if (archived.length) sections.push('archived:\n- ' + archived.join('\n- '));
+      if (active.length) sections.push('still active, not archived:\n- ' + active.join('\n- ') + '\n\nchoose `stop` on a thread to stop it without archiving it.');
+      if (failed.length) sections.push('could not archive:\n- ' + failed.join('\n- '));
+      return this.standaloneArchiveReceipt('archive all', sections.join('\n\n') || 'no open threads to archive.', text, link, bubble);
+    }
+    if (scope === 'one') {
+      let target = chatId;
+      if (!target) {
+        const beat = prior.findLast(b => b.kind === 'bubble' || b.kind === 'chat');
+        // Stream's compact mailbox snapshot retains the managed chat link
+        // for answers, and the original source beat ID for user messages.
+        target = beat?.replyChatId ?? beat?.chatId ?? (beat?.bubble?.role !== 'user' &&
+          /^\[chat with π\]\(\.\.\/\.\.\/π\/chats\/([\w-]+)\.md\)$/.exec(beat?.text)?.[1]);
+        if (!target && beat?.bubble?.role === 'user') {
+          for (const t of await this.threads()) {
+            const c = await this.chat(t.chatId);
+            if (c.messages.some(m => m.role === 'user' && m.sourceBeatId === beat.id)) { target = c.id; break; }
+          }
+        }
+      }
+      if (!target) throw new Error('No thread selected. Open the thread in the margin, then archive it.');
+      const c = await this.chat(target), t = await this.thread(c.threadId);
+      let archived;
+      try { archived = await this.archiveThreads([t.id], { focusedBeatId: sourceBeatId, runStateAtClick: t.status }, 'stream-command'); }
+      catch (error) {
+        if (!(error instanceof ActiveArchiveError)) throw error;
+        return this.standaloneArchiveReceipt('archive thread', `${t.title || 'untitled thread'} is active, so i didn’t archive it. choose \`stop\` on its row to stop it instead.`, text, link, bubble);
+      }
+      return this.archiveReceipt(c, `${archived.length ? 'archived' : 'already archived'}: ${t.title || 'untitled thread'}`, text, link, bubble);
+    }
     if (bubble) contextBeatId = prior.at(-1)?.id;
     if (!connect && !redact && !page && !(bubble && /^list threads[.!?]?$/i.test(text.trim()))) {
       try { control = await this.localControl(text.trim(), contextBeatId); } catch (error) { control = error.message; }

@@ -101,6 +101,9 @@ test('the margin restores context on demand and binds the adjacent reply to its 
   const tail = await client.showThread({ threadId: card.id, visible: [] });
   assert.equal(store.metadata.beats[tail.first].bubble.text, 'choose a draft recapped: you asked which draft to use.');
   assert.equal(store.metadata.beats[tail.first].bubble.source, 'thread-recap');
+  assert.notEqual(tail.result, tail.first);
+  assert.equal(store.metadata.beats[tail.result].bubble.text, 'the second draft');
+  assert.deepEqual(store.beats.slice(-2).map(b => b.id), [tail.result, tail.slot]);
   await store.edit([{ id: tail.slot, before: '', text: '/yes' }]);
   const request = await client.prompt({ bubble: true, sourceBeatId: tail.slot, sourceText: '/yes', text: 'yes' });
   const queued = JSON.parse(await fs.readFile(path.join(store.pi, '.runtime/mailbox-v1/in', request + '.json')));
@@ -156,4 +159,27 @@ test('routing hands off to one working row in either publication order', async t
   const failed = await submit('another task');
   await result(failed, { error: 'routing failed' });
   assert.deepEqual(await ids(), [['request-' + failed, 'failed'], ['task', 'running']]);
+});
+
+test('an archive receipt appears once below the command even after writing continues', async t => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'stream-archive-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const store = await new StreamStore(root).init(), client = await piClient(store, () => {});
+  const source = await store.append('/archive'), traceId = await client.prompt({
+    bubble: true, text: 'archive', sourceText: '/archive', sourceBeatId: source });
+  const next = await store.append('keep writing');
+  const chat = { id: 'draft', messages: [ { role: 'user', text: 'archive', traceId },
+    { role: 'assistant', source: 'archive-receipt', traceId, text: 'archived: First Draft' } ] };
+  await fs.mkdir(path.join(store.pi, 'chats'), { recursive: true });
+  await fs.writeFile(path.join(store.pi, 'chats/draft.json'), JSON.stringify(chat));
+  const out = path.join(store.pi, '.runtime/mailbox-v1/out', traceId+'.json');
+  for (let i=0; i<2; i++) {
+    await fs.writeFile(out, JSON.stringify({ source, sourceText: '/archive', chatId: chat.id }));
+    await client.sync();
+  }
+  const beats = store.snapshot().beats, receipt = beats[beats.findIndex(b => b.id === source)+1];
+  assert.equal(receipt.author, 'π');
+  assert.equal(receipt.bubble.text, 'archived: First Draft');
+  assert.equal(beats.filter(b => b.bubble?.source === 'archive-receipt').length, 1);
+  assert.equal(store.beat(next).text, 'keep writing');
 });

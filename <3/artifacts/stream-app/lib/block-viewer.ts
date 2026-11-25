@@ -31,7 +31,8 @@ export function blockViewer(label: string, restore: () => void) {
       if (dialog.open) dialog.close();
     },
   };
-  const close = button('Close block', '×', () => { void viewer.close().catch(() => {}); });
+  const close = button('Close block', 'close', () => { void viewer.close().catch(() => {}); });
+  close.className = 'viewer-close';
   bar.append(close, title);
   dialog.append(bar, body, status);
   dialog.oncancel = event => { event.preventDefault(); close.click(); };

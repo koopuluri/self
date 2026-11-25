@@ -5,7 +5,7 @@ import os from 'node:os';
 import http from 'node:http';
 import path from 'node:path';
 import { refreshStatusRanking } from '../functions.mjs';
-import { Coordinator } from '../agent.mjs';
+import { Coordinator, archiveScope } from '../agent.mjs';
 import { StreamStore } from '../store.mjs';
 import { hydrate, serializeThread, taskContext } from '../thread-session.mjs';
 
@@ -408,8 +408,8 @@ test('a check-in reads live cards while model routing and ranking are blocked', 
   } finally { release.resolve(); await ranking; }
   assert.equal((await send(agent, store, 'status')).messages.at(-1).text, '1. one task (which day?)');
   const click = { at: '2026-11-25T00:45:02.769Z', runStateAtClick: 'waiting_for_you', focusedBeatId: 0 };
-  assert.deepEqual(await agent.archiveThreads([thread.id], false, click), [thread.id]);
-  assert.deepEqual(await agent.archiveThreads([thread.id], false, click), []);
+  assert.deepEqual(await agent.archiveThreads([thread.id], click), [thread.id]);
+  assert.deepEqual(await agent.archiveThreads([thread.id], click), []);
   const saved = JSON.parse(await fs.readFile(path.join(store.pi, 'threads', thread.id + '.json'), 'utf8'));
   assert.equal(saved.status, 'archived');
   assert.deepEqual(saved.session.filter(e => e.customType === 'thread.archived').map(e => e.data),
@@ -417,4 +417,107 @@ test('a check-in reads live cards while model routing and ranking are blocked', 
   assert.equal((await send(agent, store, '')).messages.at(-1).text, 'nothing open or newly closed.');
   assert.equal((await agent.chat(chat.id)).id, chat.id);
   assert.equal(calls, 1);
+});
+
+test('a close command archives the referenced chat and confirms it inline without routing or creating a thread', async t => {
+  const { agent, store } = await fixture(t);
+  useMock(agent, context => context.systemPrompt.includes('name: process-message')
+    ? route(JSON.parse(context.messages[0].content), 'new')
+    : context.systemPrompt.includes('name: update-thread') ? organize(JSON.parse(context.messages[0].content)) : answer('done'));
+  const target = await send(agent, store, 'fix scrolling'); await idle(agent);
+  const other = await send(agent, store, 'change spacing'); await idle(agent);
+  await store.transact(() => store.insertBlock(`[chat with π](../../π/chats/${target.id}.md)`, 'bubble', {bubble:{role:'assistant',text:'done'}}));
+  const before = target.messages.length;
+  agent.route = () => assert.fail('must not route');
+  assert.equal((await send(agent, store, 'archive')).id, target.id);
+  assert.equal(target.messages.length, before + 2);
+  const command = target.messages.at(-2), receipt = target.messages.at(-1);
+  assert.equal(receipt.text, 'archived: ' + (await agent.thread(target.threadId)).title);
+  const rows = store.snapshot().beats;
+  assert.equal(rows[rows.findIndex(b => b.id === command.sourceBeatId) + 1].bubble.text, receipt.text);
+  assert.equal(receipt.role, 'assistant');
+  assert.equal(agent.replyState(target).phase, 'done');
+  assert.equal((await agent.thread(other.threadId)).lifecycle, 'open');
+  assert.equal((await agent.threads()).length, 2);
+  const saved = JSON.parse(await fs.readFile(path.join(store.pi, 'threads', target.threadId + '.json')));
+  assert.equal(saved.status, 'archived');
+  assert.equal(saved.session.find(e => e.customType === 'thread.archived').data.source, 'stream-command');
+});
+
+
+test('archive commands accept conversational variants but not discussion or other targets', () => {
+  for (const verb of ['archive', 'close']) {
+    for (const target of ['', ' thread', ' this thread', ' the current chat', ' conversation', ' it', ' that one']) {
+      assert.equal(archiveScope(verb + target), 'one', verb + target);
+    }
+  }
+  for (const verb of ['archive', 'close', 'close out']) {
+    for (const target of ['all', 'all threads', 'all open chats', 'all of my conversations', 'all of them',
+      'them all', 'every thread', 'every single open chat']) {
+      assert.equal(archiveScope(`please ${verb} ${target}!`), 'all');
+    }
+  }
+  for (const text of ['OK, please CLOSE this THREAD!', 'could you please archive it for me?',
+    'close / archive this thread', 'let’s close out the conversation', 'archive, thanks.']) assert.equal(archiveScope(text), 'one', text);
+  for (const text of ['do not close', 'how do I archive this thread?', '“archive”', 'close all threads except this one', 'add an archive all command', 'close all tabs',
+    'close the other chat', 'close the window', 'archive thread after replying', 'can you archive it later?',
+    'is close / archive thread a specific keyword match?']) assert.equal(archiveScope(text), null, text);
+});
+
+
+test('archive all needs no selected chat and confirms only newly archived titles, even on repeat', async t => {
+  const { agent, store } = await fixture(t);
+  agent.route = () => assert.fail('must not route');
+  for (const [id, title, lifecycle] of [['first', 'First Draft', 'open'], ['second', 'Second Draft', 'open'], ['old', 'Old Draft', 'archived']]) {
+    const thread = { id, title, lifecycle, status: 'waiting_for_you', messages: [] };
+    await agent.saveChat(agent.newChat(thread));
+    await agent.saveThread(thread);
+  }
+  const receipt = await send(agent, store, 'close all threads');
+  const message = receipt.messages.at(-1);
+  assert.deepEqual(message.text.split('\n').sort(), ['archived:', '- First Draft', '- Second Draft'].sort());
+  const rows = store.snapshot().beats;
+  assert.equal(rows[rows.findIndex(b => b.id === receipt.messages[0].sourceBeatId) + 1].bubble.text, message.text);
+  assert.equal(message.source, 'archive-receipt');
+  const repeat = await send(agent, store, 'archive all');
+  assert.equal(repeat.messages.at(-1).text, 'no open threads to archive.');
+  assert.ok((await agent.threads()).every(t => t.lifecycle === 'archived'));
+});
+
+test('archive and close all protect running and queued jobs and archive only idle threads', async t => {
+  const { agent, store } = await fixture(t);
+  const started = [], bothRunning = Promise.withResolvers();
+  useMock(agent, async (context, signal) => {
+    if (context.systemPrompt.includes('name: process-message')) return route(JSON.parse(context.messages[0].content), 'new');
+    if (context.systemPrompt.includes('name: update-thread')) return organize(JSON.parse(context.messages[0].content));
+    started.push(context.messages.at(-1).content);
+    if (started.length === 2) bothRunning.resolve();
+    if (!signal.aborted) await new Promise(resolve => signal.addEventListener('abort', resolve, { once: true }));
+    signal.throwIfAborted();
+  });
+  const titles = ['long task A', 'long task B', 'queued task C'];
+  for (const title of titles) await send(agent, store, title);
+  await bothRunning.promise;
+  assert.equal(agent.runQueue.length, 1);
+  const jobs = [...agent.jobs.values()];
+  try {
+    const chat = jobs[0].chat, count = chat.messages.length;
+    const source = await store.append('/archive');
+    const id = await agent.prompt({ bubble: true, chatId: chat.id, text: 'archive', sourceText: '/archive', sourceBeatId: source });
+    assert.match((await agent.chat(id)).messages.at(-1).text, /is active.*didn’t archive.*stop/);
+    assert.equal(chat.messages.length, count);
+    const inactive = { id: 'idle', title: 'finished draft', lifecycle: 'open', status: 'idle', messages: [] };
+    await agent.saveChat(agent.newChat(inactive)); await agent.saveThread(inactive);
+    const receipt = await send(agent, store, 'close all');
+    const [archived, skipped] = receipt.messages.at(-1).text.split('\n\n');
+    assert.equal(archived, 'archived:\n- finished draft');
+    assert.deepEqual(skipped.split('\n').slice(1).sort(), titles.map(title => '- ' + title));
+    assert.ok(jobs.every(j => !j.controller.signal.aborted && j.thread.lifecycle === 'open'));
+    assert.equal(agent.runQueue.length, 1);
+    assert.equal(inactive.lifecycle, 'archived');
+  } finally {
+    await Promise.all(jobs.map(j => agent.stop(j.chat.id)));
+    await idle(agent);
+  }
+  assert.ok(jobs.every(j => j.thread.lifecycle === 'open'));
 });

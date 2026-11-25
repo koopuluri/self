@@ -102,10 +102,10 @@ export async function piClient(store, send) {
     for (const id of transcripts.keys()) if (!keep.has(id)) transcripts.delete(id);
     return [...Array.from(unresolved, id => ({ id: 'routing-' + id, state: 'routing', title: '', action: '', summary: '', unread: false })), ...ranked];
   }
-  async function archiveThread({ threadId, stopActive, click }) {
+  async function archiveThread({ threadId, click }) {
     const failed = failures.find(row => row.id === threadId);
     if (failed) return store.transact(() => { store.metadata.beats[failed.source].failureArchived = true; });
-    return control('archiveThreads', { ids: [threadId], stopActive: stopActive === true, click });
+    return control('archiveThreads', { ids: [threadId], stopActive: false, click });
   }
   let previousMargin;
   let marginQueue = Promise.resolve();
@@ -132,7 +132,7 @@ export async function piClient(store, send) {
           author: 'π', bubble: { role: 'assistant', source, text } });
         const reminder = !visible.includes(card.source) && add(`thread recapped: you wrote: “${failed.text}”`, 'thread-recap');
         const result = add(failed.failure);
-        return { first: reminder || result, slot: store.beats.at(-1).id };
+        return { first: reminder || result, result, slot: store.beats.at(-1).id };
       });
     }
     const c = await chat(card.chatId);
@@ -158,7 +158,7 @@ export async function piClient(store, send) {
         ? placeMessage(store, c, latest, null)
         : bubble([card.state.replaceAll('_', ' '), card.action].filter(Boolean).join(' · '));
       store.metadata.beats[result].replyChatId = c.id;
-      return { first: first ?? result, slot: store.beats.at(-1).id };
+      return { first: first ?? result, result, slot: store.beats.at(-1).id };
     });
   }
   async function prompt(args) {
@@ -259,7 +259,13 @@ export async function piClient(store, send) {
             m.bubble.failure = result.error;
           } else {
             const i = c.messages.findIndex(m=>m.traceId===id && m.role==='user');
-            if (i>=0) attachMessage(store,source,c,i);
+            if (i>=0) {
+              attachMessage(store,source,c,i);
+              const reply = c.messages[i+1];
+              if (reply?.role === 'assistant' && reply.traceId === id && reply.source === 'archive-receipt') {
+                placeMessage(store,c,i+1,source);
+              }
+            }
             for (const effect of result.effects ?? []) {
               if (effect.kind==='chat') store.insertBlockAfter(source,'[chat with π](../../π/chats/'+effect.chatId+'.md)','chat',{chatId:effect.chatId});
               if (effect.kind==='browser') opened = store.insertBlockAfter(source,'['+effect.url+']('+effect.url+')','browser',{url:effect.url});

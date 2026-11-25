@@ -75,12 +75,14 @@ main { height: 100%; }
 .reaction::after { width: 4px; height: 4px; bottom: -7px; right: -3px; }
 .asset-block .block-frame { padding: var(--space-detail); }
 .expand-image { display: block; max-width: 100%; margin: auto; padding: 0; cursor: zoom-in; }
-.image-stage { height: 100%; overflow: auto; display: grid; }
-.image-zoom { display: block; margin: auto; padding: 0; cursor: zoom-in; }
+.expand-image:focus-visible { outline: none; filter: brightness(.96); }
+.image-stage { height: 100%; overflow: auto; overflow-anchor: none; overscroll-behavior: contain; container-type: size; }
+.image-canvas { display: flex; width: calc(100% * var(--image-scale, 1)); height: calc(100% * var(--image-scale, 1)); }
+.image-stage::-webkit-scrollbar { display: none; }
+.image-zoom { display: block; flex: none; margin: auto; padding: 0; cursor: zoom-in; }
 .image-zoom:hover { background: transparent; }
-.image-zoom img { display: block; max-width: calc(100vw - 32px); max-height: calc(100dvh - 72px); }
+.image-zoom img { display: block; width: calc(min(var(--natural-width), 100cqw - 32px, (100cqh - 32px) * var(--aspect)) * var(--image-scale, 1)); }
 .zoomed .image-zoom { cursor: zoom-out; }
-.zoomed img { max-width: none; max-height: none; }
 .message-text { overflow-wrap: anywhere; }
 .user .message-text { white-space: pre-wrap; }
 /* Match the essay body's block rhythm in personal-site/app/globals.css. */
@@ -125,10 +127,11 @@ a[href]:is(:where([data-pointer]) :hover,:focus-visible) { color: #2058af; text-
 .block-path, .block-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .block-viewer { position: fixed; inset: 0; padding: 0; margin: 0; border: 0; height: 100dvh; width: 100vw; max-width: none; max-height: none; background: var(--paper); color: var(--ink); }
 .block-viewer[open] { display: flex; flex-direction: column; }
-.block-viewer header { position: relative; display: flex; align-items: center; gap: 4px; padding: 32px 16px 8px; }
-.block-viewer header button { font-size: 22px; width: 32px; line-height: 1; }
+/* Give the viewer toolbar its own row below the native window controls. */
+.block-viewer header { position: relative; display: flex; align-items: center; gap: 4px; padding: calc(var(--space-section) + 2 * var(--space-detail)) 16px var(--space-detail); }
+.block-viewer header button:not(.viewer-close) { font-size: 22px; width: 32px; line-height: 1; }
 .block-viewer button:disabled { opacity: .3; }
-.block-title { position: absolute; left: 50%; transform: translateX(-50%); max-width: calc(100% - 250px); font-size: 13px; color: var(--muted); }
+.block-title { position: absolute; left: 50%; transform: translateX(-50%); max-width: max(0px, calc(100% - 320px)); font-size: 13px; color: var(--muted); }
 .block-body { flex: 1; min-height: 0; }
 .block-body .cm-editor, .browser-surface { display: flex; height: 100%; width: 100%; }
 .block-body .cm-content { margin-inline: auto; flex: 0 1 700px; padding: 20px 24px 64px; }
@@ -145,12 +148,10 @@ a[href]:is(:where([data-pointer]) :hover,:focus-visible) { color: #2058af; text-
   right: 8px; bottom: 32px; overflow-y: auto; opacity: 0; pointer-events: none;
   container-type: inline-size;
 }
-.thread-summary, .routing-row {
+.thread-summary {
   display: flex; align-items: center; gap: var(--space-detail); height: 32px; padding-inline: 6px;
 }
 .thread-summary { font-variant-numeric: tabular-nums; pointer-events: none; }
-.routing-row { justify-content: space-between; height: auto; min-height: 32px; padding-right: 10px; line-height: 14px; }
-.routing-row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
 :where([data-pointer]) .thread-margin:hover .thread-list, .thread-margin:has(:focus-visible) .thread-list { opacity: 1; pointer-events: auto; }
 :where([data-pointer]) .thread-margin:hover .thread-summary, .thread-margin:has(:focus-visible) .thread-summary { opacity: 0; }
 @media (prefers-reduced-motion: no-preference) {
@@ -188,14 +189,17 @@ a[href]:is(:where([data-pointer]) :hover,:focus-visible) { color: #2058af; text-
 }
 .thread-row:is([data-state="waiting_for_you"],[data-state="waiting_for_configuration"]) { color: #a35b16; }
 .thread-row:is([data-state="failed"],[data-state="interrupted"]) { color: #ac4538; }
+.viewer-close, .archive-thread {
+  color: #63655f; background: #f1f1ed; white-space: nowrap;
+}
+.viewer-close { flex: none; font-size: 14px; line-height: 20px; padding: 4px 12px; }
 .archive-thread {
   display: none; flex: none; align-items: center; justify-content: center;
   margin-right: 6px; padding: 2px 6px; border-radius: 4px; line-height: 16px; font-size: 11px;
-  color: #63655f; background: #f1f1ed; white-space: nowrap;
 }
 .thread-row:is(:where([data-pointer]) :hover,:focus-within,[data-exit]) .archive-thread { display: flex; }
-.archive-thread:is(:where([data-pointer]) :hover,:focus-visible) { color: var(--ink); background: #eeeeea; }
-.archive-thread:active { background: #e7e7e2; }
+:is(.viewer-close,.archive-thread):is(:where([data-pointer]) :hover,:focus-visible) { color: var(--ink); background: #eeeeea; }
+:is(.viewer-close,.archive-thread):active { background: #e7e7e2; }
 .archive-thread svg { display: none; }
 @container (max-width: 176px) {
   .archive-thread span { display: none; }

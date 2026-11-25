@@ -6,6 +6,7 @@ import { editorHistory, makeEditor, remote, sync, type EditorContext } from '../
 import { closeBlock, openFileOrBrowser } from '../lib/block-viewer';
 import { mergeEmbeds } from '../lib/merge-embeds';
 import { identity, setIdentity } from '../lib/identity';
+import { revealDelta, snapshotEdit } from '../lib/message-scroll';
 import { marginRows } from '../lib/margin-rows';
 import type { Reply, Snapshot, StreamEvent, ThreadCard } from '../lib/types';
 
@@ -13,9 +14,11 @@ type Invitation = { source: number; slot: number; follow: boolean; delivering?: 
 const invitationKey = 'stream.reply-invitation';
 
 function RoutingRow() {
-  return <div className="routing-row" role="status">
-    <span>deciding if new / existing thread...</span>
-    <span className="thread-spinner" aria-hidden="true" />
+  return <div className="thread-row" role="status">
+    <div className="thread-title">
+      <MarginLabel title="deciding if new / existing thread..." />
+      <span className="thread-indicator thread-spinner" aria-hidden="true" />
+    </div>
   </div>;
 }
 
@@ -39,7 +42,6 @@ export default function Stream() {
   const returnFrame = useRef(0);
   const [away, setAway] = useState(false);
   const waiting = useRef<Invitation | null>(null);
-  const revealing = useRef<Invitation | null>(null);
   const submitting = useRef(new Set<{ source: number; slot: number }>());
   const submissionQueue = useRef(Promise.resolve());
   const awayRef = useRef(false), initialized = useRef(false);
@@ -58,7 +60,7 @@ export default function Stream() {
     try {
       const state = view.current?.state;
       const focusedBeatId = state?.field(identity).ids[state.doc.lineAt(state.selection.main.head).number - 1] ?? null;
-      await call('archiveThread', { threadId: card.id, stopActive: ['running', 'queued'].includes(card.state),
+      await call('archiveThread', { threadId: card.id,
         click: { at: new Date().toISOString(), runStateAtClick: card.state, focusedBeatId } });
     } catch (e) {
       dispatchRows({ type: 'restore', id: card.id });
@@ -78,11 +80,14 @@ export default function Stream() {
       }).map(node => Number(node.dataset.beat));
       await flush();
       const revision = revisions.current.local;
-      const { first, slot } = await call('showThread', { threadId: card.id, visible });
+      const { result, slot } = await call('showThread', { threadId: card.id, visible });
       if (revision !== revisions.current.local) return;
-      goTo(slot, true, 'nearest');
-      const index = cm.state.field(identity).ids.indexOf(first);
-      if (index >= 0) cm.dispatch({ effects: EditorView.scrollIntoView(cm.state.doc.line(index + 1).from, { y: 'start', yMargin: 48 }) });
+      revealMessage(cm, result, () => {
+        const next = cm.state.field(identity).ids.indexOf(slot);
+        if (next < 0) return;
+        cm.dispatch({ selection: { anchor: cm.state.doc.line(next + 1).to } });
+        cm.focus();
+      });
     } catch (e) { error(e); }
     finally { threadAction.current = false; }
   }
@@ -94,6 +99,7 @@ export default function Stream() {
     const doc = snapshot.beats.map(b => b.text).join('\n');
     const same = base.current?.hash === snapshot.hash && old.nextId === snapshot.nextId &&
       ids.length === old.ids.length && ids.every((id, i) => old.ids[i] === id);
+    const added = newMessage(snapshot, ctx);
     ctx.beats = snapshot.beats;
     ctx.byId = new Map(snapshot.beats.map(b => [b.id, b]));
     base.current = snapshot;
@@ -107,11 +113,27 @@ export default function Stream() {
           + Math.min(pos - line.from, snapshot.beats[row].text.length);
       };
       const { anchor, head } = cm.state.selection.main;
-      cm.dispatch({ changes: { from: 0, to: cm.state.doc.length, insert: doc }, selection: { anchor: position(anchor), head: position(head) },
-        effects: [setIdentity.of({ ids, nextId: snapshot.nextId, retired: snapshot.retired }), sync.of(), editorHistory.reconfigure([])], annotations: remote });
+      const change = viewportEdit(cm, doc);
+      cm.dispatch({ changes: change.changes, selection: { anchor: position(anchor), head: position(head) },
+        effects: [...change.effects, setIdentity.of({ ids, nextId: snapshot.nextId, retired: snapshot.retired }), sync.of(), editorHistory.reconfigure([])], annotations: remote });
       cm.dispatch({ effects: editorHistory.reconfigure(history()), annotations: remote });
     }
-
+    if (added !== undefined) revealMessage(cm, added);
+  }
+  function viewportEdit(cm: EditorView, next: string) {
+    const changes = cm.state.changes(snapshotEdit(cm.state.doc.toString(), next));
+    const anchor = cm.scrollSnapshot().map(changes);
+    return { changes, effects: anchor ? [anchor] : [] };
+  }
+  function newMessage(snapshot: Snapshot, ctx: EditorContext) {
+    // Explicit thread selection reveals its result and then focuses its slot.
+    // A writer who left a pending invitation shouldn't be pulled back to it.
+    if (threadAction.current) return;
+    const index = snapshot.beats.findLastIndex(b => b.bubble?.role === 'assistant' && ctx.byId.get(b.id)?.bubble?.role !== 'assistant');
+    if (index < 0) return;
+    const invite = waiting.current;
+    if (invite && !invite.follow && snapshot.beats[index - 1]?.id === invite.source) return;
+    return snapshot.beats[index].id;
   }
   async function receive(result: Reply|null) { if (result?.snapshot) apply(result.snapshot); return result?.value; }
   async function call(method: string, args: any = {}) { const result = await window.streamAPI!.call(method, args); return receive(result); }
@@ -145,12 +167,15 @@ export default function Stream() {
           if (waiting.current) setInvitation(waiting.current);
           const { anchor, head } = current.selection.main;
           const ctx = context.current!;
+          const added = newMessage(snapshot, ctx);
           ctx.beats = snapshot.beats; ctx.byId = new Map(snapshot.beats.map(b => [b.id, b]));
           base.current = snapshot;
-          cm.dispatch({ changes: { from: 0, to: current.doc.length, insert: merged.rows.map(b => b.text).join('\n') },
+          const change = viewportEdit(cm, merged.rows.map(b => b.text).join('\n'));
+          cm.dispatch({ changes: change.changes,
             selection: { anchor: position(anchor), head: position(head) },
-            effects: [setIdentity.of(merged.identity), sync.of(), editorHistory.reconfigure([])], annotations: remote });
+            effects: [...change.effects, setIdentity.of(merged.identity), sync.of(), editorHistory.reconfigure([])], annotations: remote });
           cm.dispatch({ effects: editorHistory.reconfigure(history()), annotations: remote });
+          if (added !== undefined) revealMessage(cm, added);
           continue;
         }
         base.current = reply.snapshot!;
@@ -230,45 +255,10 @@ export default function Stream() {
     });
     try { await submissionQueue.current; } finally { submitting.current.delete(entry); }
   }
-  function showAnswer(invitation: Invitation) {
-    const cm = view.current, ctx = context.current;
-    if (!cm || !ctx || !invitation.follow) return;
-    const index = ctx.beats.findIndex(b => b.id === invitation.source);
-    const answer = ctx.beats[index + 1];
-    if (!answer || (answer.kind !== 'browser' && answer.bubble?.role !== 'assistant')) return;
-    revealing.current = invitation;
-    // A long bubble may initially have only its virtualized height estimate.
-    // Reveal it, then correct against the rendered widget after layout settles.
-    const reveal = (remaining: number) => requestAnimationFrame(() => {
-      if (view.current !== cm || revealing.current !== invitation) return;
-      cm.requestMeasure({
-        read(view) {
-          const state = view.state, ids = state.field(identity).ids;
-          if (!invitation.follow || !view.hasFocus || ids[state.doc.lineAt(state.selection.main.head).number - 1] !== invitation.slot) return null;
-          const i = ids.indexOf(answer.id);
-          if (i < 0) return null;
-          const bounds = view.scrollDOM.getBoundingClientRect();
-          const rect = view.contentDOM.querySelector(`[data-beat="${answer.id}"]`)?.getBoundingClientRect();
-          const block = view.lineBlockAt(state.doc.line(i + 1).from);
-          const top = (rect?.top ?? view.documentTop + block.top) - bounds.top;
-          const height = rect?.height ?? block.height;
-          return top >= 48 && top + height <= bounds.height ? 0 : top - 48;
-        },
-        write(delta, view) {
-          if (revealing.current !== invitation) return;
-          if (delta !== null && Math.abs(delta) > 1) view.scrollDOM.scrollTop += delta;
-          if (remaining && delta !== null) reveal(remaining - 1);
-          else revealing.current = null;
-        },
-      });
-    });
-    reveal(3);
-  }
   async function updateReply(event: StreamEvent) {
     const entry = waiting.current;
     if (!entry || event.id !== entry.source || entry.delivering || event.phase === 'working') return;
     if (event.phase === 'done' || !openSlot(entry)) {
-      showAnswer(entry);
       setInvitation(null);
       return;
     }
@@ -278,7 +268,6 @@ export default function Stream() {
       await flush();
       if (waiting.current === entry && openSlot(entry)) {
         await call('deliver', { chatId: event.chatId, messageIndex: event.messageIndex, after: entry.source, slot: entry.slot });
-        if (waiting.current === entry) showAnswer(entry);
       }
     } finally {
       if (waiting.current === entry) setInvitation(null);
@@ -341,30 +330,72 @@ export default function Stream() {
     cancelAnimationFrame(returnFrame.current);
     returnFrame.current = 0;
   }
+  function revealMessage(cm: EditorView, id: number, finish = () => {}) {
+    cancelReturn();
+    returnFrame.current = requestAnimationFrame(() => {
+      returnFrame.current = 0;
+      const scroller = cm.scrollDOM;
+      const writingRoom = 3 * parseFloat(getComputedStyle(document.documentElement).fontSize);
+      const destination = () => {
+        const index = cm.state.field(identity).ids.indexOf(id);
+        if (index < 0) return scroller.scrollTop;
+        const bounds = scroller.getBoundingClientRect();
+        const node = cm.contentDOM.querySelector(`.beat-block[data-beat="${id}"]`);
+        const frame = node?.querySelector('.block-frame');
+        let top: number, bottom: number;
+        if (node && frame) {
+          // Include reactions above the frame, not the gap beneath it.
+          top = node.getBoundingClientRect().top; bottom = frame.getBoundingClientRect().bottom;
+        } else {
+          const block = cm.lineBlockAt(cm.state.doc.line(index + 1).from);
+          top = cm.documentTop + block.top; bottom = cm.documentTop + block.bottom;
+        }
+        const next = index + 2 <= cm.state.doc.lines ? cm.state.doc.line(index + 2) : null;
+        const room = next && !next.length
+          ? Math.max(writingRoom, cm.documentTop + cm.lineBlockAt(next.from).top + cm.defaultLineHeight - bottom)
+          : 0;
+        return scroller.scrollTop + revealDelta(top, bottom, bounds.top, bounds.bottom, room);
+      };
+      if (Math.abs(destination() - scroller.scrollTop) <= 0.5) { finish(); return; }
+      animateScroll(cm, destination, finish);
+    });
+  }
   function returnToLatest() {
     const cm = view.current;
     if (!cm) return;
+    animateScroll(cm, () => cm.scrollDOM.scrollHeight - cm.scrollDOM.clientHeight, () => {
+      const end = cm.state.doc.length;
+      cm.dispatch({ selection: { anchor: end }, effects: EditorView.scrollIntoView(end, { y: 'nearest', yMargin: 48 }) });
+      cm.focus();
+    });
+  }
+  function animateScroll(cm: EditorView, destination: () => number, finish: () => void) {
     cancelReturn();
     const scroller = cm.scrollDOM;
-    const start = scroller.scrollTop;
-    const startTime = performance.now();
-    const screens = Math.max(0, scroller.scrollHeight - scroller.clientHeight - start) / scroller.clientHeight;
-    const duration = Math.min(1050, 350 + 140 * Math.log1p(screens));
+    let start = scroller.scrollTop, startTime = performance.now(), previous = destination();
+    const travelTime = (pixels: number) => Math.min(1050, 350 + 140 * Math.log1p(Math.abs(pixels) / scroller.clientHeight));
+    let duration = travelTime(previous - start), settling = false;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const step = (now: number) => {
       // CodeMirror refines offscreen beat heights as they enter the viewport.
-      const target = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+      const target = destination();
+      if (Math.abs(target - previous) > scroller.clientHeight / 2) {
+        // A newly mounted reply can be many screens taller than its estimate.
+        // Ease the remaining distance rather than jumping to the new endpoint.
+        start = scroller.scrollTop; startTime = now; duration = travelTime(target - start);
+      }
+      previous = target;
       const t = reducedMotion ? 1 : Math.min(1, Math.max(0, (now - startTime) / duration));
       // Peak speed at two thirds of the trip, with zero velocity at both ends.
       const progress = t ** 3 * (4 - 3 * t);
       scroller.scrollTop = start + (target - start) * progress;
-      if (t < 1) {
+      if (t < 1 || !settling) {
+        // Give CodeMirror a layout frame at the endpoint, even without motion.
+        settling = t === 1;
         returnFrame.current = requestAnimationFrame(step);
       } else {
         returnFrame.current = 0;
-        const end = cm.state.doc.length;
-        cm.dispatch({ selection: { anchor: end }, effects: EditorView.scrollIntoView(end, { y: 'nearest', yMargin: 48 }) });
-        cm.focus();
+        finish();
       }
     };
     returnFrame.current = requestAnimationFrame(step);
@@ -427,7 +458,6 @@ export default function Stream() {
     const interrupts = ['wheel', 'pointerdown', 'touchstart', 'keydown'] as const;
     const interrupt = (event: Event) => {
       cancelReturn();
-      revealing.current = null;
       const entry = waiting.current;
       if (entry && event.type !== 'keydown') {
         const beat = event.target instanceof Element && event.target.closest<HTMLElement>('[data-beat]')?.dataset.beat;
@@ -480,7 +510,7 @@ export default function Stream() {
           if (card.state === 'routing') return <RoutingRow key={card.id} />;
           const active = ['running', 'queued'].includes(card.state);
           const state = active ? 'working' : card.unread ? 'unread' : card.state;
-          const archive = active ? 'stop and archive' : 'archive';
+          const action = active ? 'stop' : 'archive';
           return <div className="thread-row" key={card.id} data-state={state} data-exit={exit} inert={!!exit}
             onAnimationEnd={event => {
               if (event.target === event.currentTarget && event.animationName === 'thread-exit') dispatchRows({ type: 'finish', id: card.id });
@@ -490,9 +520,9 @@ export default function Stream() {
               <MarginLabel title={card.title} />
               {(active || card.unread) && <span className={active ? "thread-indicator thread-spinner" : "thread-indicator"} aria-hidden="true" />}
             </button>
-            <button className="archive-thread" title={archive} aria-label={archive + ' ' + card.title}
-              onClick={() => void archiveThread(card)}>
-              <span>{archive}</span>
+            <button className="archive-thread" title={action} aria-label={action + ' ' + card.title}
+              onClick={() => active ? void call('stop', { chatId: card.chatId }).catch(error) : void archiveThread(card)}>
+              <span>{action}</span>
               <svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
                 {active ? <rect x="4" y="4" width="8" height="8" rx="1" /> : <path d="M2 3h12v3H2z M3.5 6v7h9V6 M6.5 8.5h3" />}
               </svg>
