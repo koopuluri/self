@@ -3532,4 +3532,4 @@ some tasks for later: i shouldn't be able to... ok fuck it let's just do it now 
 
 /i shouldn't be able to select all the entire stream and like accidentally delete it. select all (cmd a / any other variant) should only be able to select the current beat, that's it. <!-- beat:1903 -->
 
-ok. once these threads are completed and closed, will go sit. LOL.  <!-- beat:1904 -->
+ok. once these threads are completed and closed, will go sit. LOL. been saying this a few times now. can't let go tho.  <!-- beat:1904 -->
