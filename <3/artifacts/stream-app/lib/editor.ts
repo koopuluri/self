@@ -52,7 +52,10 @@ class Block extends WidgetType {
       outer.classList.add(user ? 'user' : 'assistant');
       outer.setAttribute('aria-label', user ? 'Your message' : 'π’s reply');
       const body = el('div', 'message-text');
-      body.append(messageBody(message.text, !user && message.source !== 'system-status'));
+      const recap = message.source === 'thread-recap' && /^(.+? recapped:) /.exec(message.text);
+      if (recap) {
+        body.append(el('strong', '', recap[1]), messageBody(message.text.slice(recap[1].length), false));
+      } else body.append(messageBody(message.text, !user && message.source !== 'system-status'));
       box.append(body);
       if (message.reaction) {
         const reaction = el('span', 'reaction');
@@ -86,6 +89,7 @@ function pasteLines(view: EditorView, text: string, from: number, to: number) {
   return true;
 }
 export function makeEditor(parent: HTMLElement, ctx: EditorContext) {
+  const isBlock = (id: number) => (ctx.byId.get(id)?.kind ?? 'text') !== 'text';
   function blocks(state: EditorState): DecorationSet {
     const ranges = [];
     const ids = state.field(identity).ids;
@@ -171,14 +175,14 @@ export function makeEditor(parent: HTMLElement, ctx: EditorContext) {
           if (prompt || (sel.empty && sel.from === line.to)) ctx.entered(id, line.text);
           return true;
         } },
-        { key: 'Backspace', run: deletePassages }, { key: 'Delete', run: deletePassages },
+        { key: 'Backspace', run: view => deletePassages(view, isBlock) }, { key: 'Delete', run: view => deletePassages(view, isBlock) },
         { key: 'Mod-Shift-c', run(view) {
           const state = view.state, id = state.field(identity).ids[state.doc.lineAt(state.selection.main.head).number - 1];
           void window.streamAPI?.copyBeatLink(id);
           return true;
         } },
-        { key: 'Alt-ArrowUp', run: view => movePassage(view, -1) },
-        { key: 'Alt-ArrowDown', run: view => movePassage(view, 1) },
+        { key: 'Alt-ArrowUp', run: view => movePassage(view, -1, isBlock) },
+        { key: 'Alt-ArrowDown', run: view => movePassage(view, 1, isBlock) },
         { key: 'Mod-Enter', run() { ctx.leave(-1); return true; } },
         ...defaultKeymap, ...historyKeymap, ...searchKeymap,
       ]),

@@ -142,7 +142,7 @@ a[href]:is(:hover,:focus-visible) { color: #2058af; text-decoration-color: curre
   display: flex; flex-direction: column; gap: 0;
   overflow-y: auto; font-size: 12px; color: #7b7d75;
 }
-.thread-row { display: flex; align-items: center; border-radius: 5px; }
+.thread-row { display: flex; align-items: center; }
 .thread-row[data-exit="sliding"] {
   animation: thread-exit 230ms cubic-bezier(.19,.85,.32,1.08) both;
 }
@@ -150,6 +150,9 @@ a[href]:is(:hover,:focus-visible) { color: #2058af; text-decoration-color: curre
 @media (prefers-reduced-motion: reduce) {
   .thread-row[data-exit="sliding"] { visibility: hidden; animation-duration: 1ms; }
 }
+.thread-row:first-child { border-radius: 5px 5px 0 0; }
+.thread-row:last-child { border-radius: 0 0 5px 5px; }
+.thread-row:only-child { border-radius: 5px; }
 .thread-row:is(:hover,:focus-within) { background: #f7f7f4; }
 .thread-title {
   display: flex; flex: 1; min-width: 0; align-items: center; gap: var(--space-detail);

@@ -23,6 +23,28 @@ test('Markdown preserves whitespace and identities after deletion', async t => {
   assert.equal(serialize([{ id: 0, text: 'two spaces  ' }]), 'two spaces   <!-- beat:0 -->\n');
   assert.equal(parse('two spaces   <!-- beat:0 -->\n')[0].text, 'two spaces  ');
 });
+test('a stream ending in a bubble regains one writable line on open and after edits', async t => {
+  const store = await fixture(t);
+  const reply = await store.transact(() => store.insertBlock('[chat]', 'bubble', {
+    bubble: { role: 'assistant', text: 'reply' },
+  }));
+  const bubbleOnly = serialize([store.beat(reply)]);
+  await fs.writeFile(store.file, bubbleOnly);
+  const reopened = await new StreamStore(store.root).init();
+  const checkTail = current => {
+    assert.deepEqual(current.snapshot().beats.map(b => [b.kind, b.text]), [['bubble', '[chat]'], ['text', '']]);
+    return current.beats.at(-1).id;
+  };
+  const slot = checkTail(reopened);
+  await reopened.remove(slot);
+  assert.ok(checkTail(reopened) > slot);
+  await fs.writeFile(store.file, bubbleOnly);
+  assert.equal(await reopened.checkExternal(), true);
+  const finalSlot = checkTail(reopened);
+  assert.equal(await reopened.checkExternal(), false);
+  assert.equal(checkTail(await new StreamStore(store.root).init()), finalSlot);
+});
+
 test('external edits are read; a stale app edit never overwrites them', async t => {
   const store = await fixture(t);
   await store.edit([{ id: 0, before: '', text: 'original' }]);

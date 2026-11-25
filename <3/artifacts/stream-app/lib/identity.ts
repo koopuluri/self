@@ -63,7 +63,7 @@ export const trackIdentity = EditorState.transactionExtender.of(tr => {
 export const undoIdentity = invertedEffects.of(tr =>
   tr.effects.some(e => e.is(setIdentity)) ? [setIdentity.of(tr.startState.field(identity))] : []);
 
-export function deletePassages(view: EditorView) {
+export function deletePassages(view: EditorView, isBlock: (id: number) => boolean = () => false) {
   const state = view.state, doc = state.doc, selection = state.selection.main;
   if (selection.empty) return false;
   const first = doc.lineAt(selection.from), last = doc.lineAt(selection.to);
@@ -71,15 +71,17 @@ export function deletePassages(view: EditorView) {
   const old = state.field(identity), ids = old.ids.slice(), retired = { ...old.retired };
   for (const id of ids.splice(first.number - 1, last.number - first.number + 1)) retired[id] = null;
   let nextId = old.nextId;
-  if (!ids.length) ids.push(nextId++);
-  const from = last.number === doc.lines && first.number > 1 ? first.from - 1 : first.from;
+  const deletesTail = last.number === doc.lines;
+  const needsWritingLine = !ids.length || (deletesTail && isBlock(ids[ids.length - 1]));
+  if (needsWritingLine) ids.push(nextId++);
+  const from = deletesTail && !needsWritingLine ? first.from - 1 : first.from;
   const to = last.number < doc.lines ? last.to + 1 : last.to;
   view.dispatch({ changes: { from, to }, selection: { anchor: from }, effects: setIdentity.of({ ...old, ids, nextId, retired }),
     annotations: isolateHistory.of('full'), userEvent: 'delete.beats', scrollIntoView: true });
   return true;
 }
 
-export function movePassage(view: EditorView, direction: -1|1) {
+export function movePassage(view: EditorView, direction: -1|1, isBlock: (id: number) => boolean = () => false) {
   const { state } = view, doc = state.doc, sel = state.selection.main;
   const first = doc.lineAt(sel.from).number - 1;
   const end = doc.lineAt(sel.to);
@@ -92,12 +94,17 @@ export function movePassage(view: EditorView, direction: -1|1) {
   ids.splice(direction < 0 ? stop : start, 0, neighborId);
   const texts = Array.from({ length: stop - start + 1 }, (_, i) => doc.line(start + i + 1).text);
   if (direction < 0) texts.push(texts.shift()!); else texts.unshift(texts.pop()!);
+  let nextId = old.nextId;
+  if (stop === doc.lines - 1 && isBlock(ids[stop])) {
+    ids.push(nextId++);
+    texts.push('');
+  }
   const offset = direction * (doc.line(neighbor + 1).length + 1);
   const bound = (n: number) => Math.min(n + offset, doc.length);
   view.dispatch({
     changes: { from: doc.line(start + 1).from, to: doc.line(stop + 1).to, insert: texts.join('\n') },
     selection: { anchor: bound(sel.anchor), head: bound(sel.head) }, scrollIntoView: true,
-    effects: setIdentity.of({ ...old, ids }), annotations: isolateHistory.of('full'), userEvent: 'move.beats',
+    effects: setIdentity.of({ ...old, ids, nextId }), annotations: isolateHistory.of('full'), userEvent: 'move.beats',
   });
   return true;
 }

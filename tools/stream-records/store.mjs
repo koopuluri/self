@@ -123,8 +123,8 @@ export class StreamStore extends EventEmitter {
 
     }
     this.reconcile(); this.hash = digest(source);
-    if (!this.beats.length) this.add('', 'text');
-    if (predecessor !== current || serialize(this.beats) !== source && (legacy || !source.trim())) await this.persist();
+    const repairedTail = this.ensureWritableEnd();
+    if (repairedTail || predecessor !== current || serialize(this.beats) !== source && (legacy || !source.trim())) await this.persist();
     else await this.persistMetadata();
     return this;
   }
@@ -154,6 +154,12 @@ export class StreamStore extends EventEmitter {
     return id;
   }
   beat(id) { return this.beats.find(b => b.id === id); }
+  ensureWritableEnd() {
+    const last = this.beats.at(-1);
+    if (last && this.metadata.beats[last.id].kind === 'text') return false;
+    this.add('', 'text');
+    return true;
+  }
   precedingTextBeats(before, count, includeMedia = false) {
     if (!Number.isSafeInteger(count) || count < 1 || count > 50) throw new Error('Choose a count from 1 to 50.');
     let end = this.beats.length;
@@ -194,7 +200,7 @@ export class StreamStore extends EventEmitter {
       if (Object.hasOwn(this.metadata.beats[id] || {}, 'redirect')) throw new Error(`Retired beat ID ${id} cannot be reused.`);
     }
     this.beats = rows; this.reconcile();
-    if (!rows.length) { this.add('', 'text'); await this.persist(); }
+    if (this.ensureWritableEnd()) await this.persist();
     else { this.hash = digest(source); await this.persistMetadata(); }
     return true;
   }
@@ -222,7 +228,9 @@ export class StreamStore extends EventEmitter {
   transact(fn) {
     const work = this.queue.then(async () => {
       await this.reloadExternal();
-      const result = await fn(); await this.persist();
+      const result = await fn();
+      this.ensureWritableEnd();
+      await this.persist();
       this.emit('changed', this.snapshot()); return result;
     });
     this.queue = work.catch(() => {}); return work;

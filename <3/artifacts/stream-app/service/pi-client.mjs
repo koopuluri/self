@@ -86,9 +86,9 @@ export async function piClient(store, send) {
     if (card.source !== undefined) {
       return store.transact(() => {
         const failed = store.metadata.beats[card.source].bubble;
-        const add = text => store.insertBlock('[π request](https://koopuluri.com/stream/' + card.source + ')', 'bubble', {
-          author: 'π', bubble: { role: 'assistant', source: 'system-status', text } });
-        const reminder = !visible.includes(card.source) && add(card.title);
+        const add = (text, source = 'system-status') => store.insertBlock('[π request](https://koopuluri.com/stream/' + card.source + ')', 'bubble', {
+          author: 'π', bubble: { role: 'assistant', source, text } });
+        const reminder = !visible.includes(card.source) && add(`thread recapped: you wrote: “${failed.text}”`, 'thread-recap');
         const result = add(failed.failure);
         return { first: reminder || result, slot: store.beats.at(-1).id };
       });
@@ -100,8 +100,8 @@ export async function piClient(store, send) {
     const active = ['running', 'queued'].includes(card.state);
     return store.transact(() => {
       const reference = '[chat with π](../../π/chats/' + c.id + '.md)';
-      const bubble = text => store.insertBlock(reference, 'bubble', { chatId: c.id, author: 'π',
-        bubble: { role: 'assistant', source: 'system-status', text } });
+      const bubble = (text, source = 'system-status') => store.insertBlock(reference, 'bubble', { chatId: c.id, author: 'π',
+        bubble: { role: 'assistant', source, text } });
       const inView = visible.some(id => {
         const beat = store.metadata.beats[id];
         return beat?.chatId === c.id && beat.bubble?.role === 'user' && beat.messageIndex === lastUser;
@@ -109,8 +109,8 @@ export async function piClient(store, send) {
       let first;
       if (!inView) {
         const ask = c.messages[lastUser];
-        const reminder = (ask?.traceId && ask.traceId === card.humanContextTraceId && card.human_context) || ask?.text;
-        first = bubble([card.title.toLowerCase(), reminder !== card.title && reminder].filter(Boolean).join('\n\n'));
+        const reminder = (ask?.traceId && ask.traceId === card.humanContextTraceId && card.human_context) || (ask?.text && `you wrote: “${ask.text}”`);
+        if (reminder) first = bubble(`${card.title.toLowerCase()} recapped: ${reminder}`, 'thread-recap');
       }
       const result = !active && latest > lastUser
         ? placeMessage(store, c, latest, null)

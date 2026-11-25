@@ -36,6 +36,28 @@ test('editing acts on passages, including undo, fresh allocation and moves', () 
   assert.equal(layout().nextId, 93);
 });
 
+test('deleting the last passage under a bubble leaves the caret ready to type', () => {
+  let state = EditorState.create({
+    doc: '[reply]\ndraft', selection: { anchor: 8, head: 13 },
+    extensions: [identity.init(() => ({ ids: [0, 1], nextId: 2, retired: {} })), trackIdentity, undoIdentity, history()],
+  });
+  const view = { get state() { return state; }, dispatch(spec) { state = spec.state || state.update(spec).state; } };
+  const isBlock = id => id === 0;
+  deletePassages(view, isBlock);
+  assert.deepEqual(state.field(identity).ids, [0, 2]);
+  assert.equal(state.field(identity).retired[1], null);
+  assert.equal(state.doc.toString(), '[reply]\n');
+  assert.equal(state.selection.main.head, state.doc.length);
+  undo(view);
+  assert.equal(state.doc.toString(), '[reply]\ndraft');
+  redo(view);
+  view.dispatch(state.replaceSelection('next'));
+  assert.equal(state.doc.toString(), '[reply]\nnext');
+  movePassage(view, -1, isBlock);
+  assert.equal(state.doc.toString(), 'next\n[reply]\n');
+  assert.deepEqual(state.field(identity).ids, [2, 0, 3]);
+});
+
 test('a delivered reply and concurrent paragraph split keep distinct IDs and preserve both edits', () => {
   const base = { nextId: 8, beats: [{ id: 5, text: '/question' }, { id: 7, text: '' }] };
   const reply = { id: 8, kind: 'bubble', text: '[reply]' };
