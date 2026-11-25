@@ -3554,4 +3554,4 @@ ok that works. good. <!-- beat:1911 -->
 
 /commit and push all open stuff <!-- beat:1914 -->
 
-alright. where am i? oh right i wanted to go sit for a bit. lots of ideas coming to mind, but i can feel the excitement and an excited mind is not  <!-- beat:1916 -->
+alright. where am i? oh right i wanted to go sit for a bit. lots of ideas coming to mind, but i can feel the excitement and an excited mind is not the right mind to explore. gotta let it settle s o <!-- beat:1916 -->
