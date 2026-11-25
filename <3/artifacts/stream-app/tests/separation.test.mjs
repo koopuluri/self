@@ -97,7 +97,7 @@ test('the margin restores context on demand and binds the adjacent reply to its 
   assert.deepEqual(events, [{ event: 'open-threads', cards: [{ ...card, title: 'choose a draft', unread: true }] }]);
   const shown = await client.showThread({ threadId: card.id, visible: [source] });
   assert.equal(store.metadata.beats[shown.first].bubble.text, 'the second draft');
-  assert.equal((await client.openThreads())[0].unread, false);
+  assert.equal((await client.openThreads()).find(c => c.id === card.id).unread, false);
   const tail = await client.showThread({ threadId: card.id, visible: [] });
   assert.equal(store.metadata.beats[tail.first].bubble.text, 'choose a draft recapped: you asked which draft to use.');
   assert.equal(store.metadata.beats[tail.first].bubble.source, 'thread-recap');
@@ -108,9 +108,52 @@ test('the margin restores context on demand and binds the adjacent reply to its 
   assert.equal(await fs.readFile(path.join(store.pi, 'chats/draft.json'), 'utf8'), JSON.stringify(chat));
   chat.messages.push({ role: 'user', text: 'next?' }, { role: 'assistant', text: 'send it' });
   await fs.writeFile(path.join(store.pi, 'chats/draft.json'), JSON.stringify(chat));
-  assert.equal((await client.openThreads())[0].unread, true);
+  assert.equal((await client.openThreads()).find(c => c.id === card.id).unread, true);
   const next = await client.showThread({ threadId: card.id, visible: [] });
   assert.equal(store.metadata.beats[next.first].bubble.text, 'choose a draft recapped: you wrote: “next?”');
   await store.transact(() => { store.metadata.readResults = { thread: { chatId: 'draft', index: 3 } }; });
-  assert.equal((await client.openThreads())[0].unread, false);
+  assert.equal((await client.openThreads()).find(c => c.id === card.id).unread, false);
+});
+
+test('routing hands off to one working row in either publication order', async t => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'stream-routing-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const store = await new StreamStore(root).init();
+  const client = await piClient(store, () => {});
+  const dir = path.join(store.pi, '.runtime');
+  await fs.mkdir(path.join(store.pi, 'chats'), { recursive: true });
+  const submit = async text => {
+    const id = await store.append('/' + text);
+    await client.prompt({ bubble: true, text, sourceText: '/' + text, sourceBeatId: id });
+    return id;
+  };
+  const ids = async () => (await client.openThreads()).map(c => [c.id, c.state]);
+  const card = { id: 'task', title: 'draft', chatId: 'chat', state: 'running' };
+  const margin = cards => fs.writeFile(path.join(dir, 'open-threads.json'), JSON.stringify(cards));
+  const conversation = { id: 'chat', threadId: 'task', status: 'running', messages: [] };
+  const route = async id => {
+    conversation.messages.push({ role: 'user', text: 'draft', sourceBeatId: id, traceId: 'beat-' + id });
+    await fs.writeFile(path.join(store.pi, 'chats/chat.json'), JSON.stringify(conversation));
+  };
+  const result = async (source, data) => {
+    await fs.writeFile(path.join(dir, 'mailbox-v1/out', `beat-${source}.json`), JSON.stringify({ source, sourceText: store.beat(source).text, ...data }));
+    await client.sync();
+  };
+  const first = await submit('draft');
+  const placeholder = ['routing-' + first, 'routing'];
+  assert.deepEqual(await ids(), [placeholder]);
+  await route(first);
+  await result(first, { chatId: 'chat' }); // receipt before ranked list
+  assert.deepEqual(await ids(), [placeholder]);
+  await margin([card]);
+  assert.deepEqual(await ids(), [['task', 'running']]);
+  const follow = await submit('continue');
+  assert.deepEqual(await ids(), [['routing-' + follow, 'routing'], ['task', 'running']]);
+  await route(follow); // already-running target accepts input before receipt
+  assert.deepEqual(await ids(), [['task', 'running']]);
+  await result(follow, { chatId: 'chat' });
+  assert.deepEqual(await ids(), [['task', 'running']]);
+  const failed = await submit('another task');
+  await result(failed, { error: 'routing failed' });
+  assert.deepEqual(await ids(), [['request-' + failed, 'failed'], ['task', 'running']]);
 });

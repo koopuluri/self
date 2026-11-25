@@ -28,6 +28,17 @@ export async function piClient(store, send) {
   }
   let failures = failedRequests();
   store.on('changed', () => { failures = failedRequests(); });
+  // Mailbox requests survive editor restarts. Keep their UI separate from
+  // real threads: a routing row has neither a title nor thread actions.
+  const pendingRequests = () => store.beats.filter(({ id }) => {
+    const beat = store.metadata.beats[id];
+    return beat.requestId && beat.requestId !== beat.appliedRequest && !beat.chatId && !beat.bubble?.failure;
+  }).map(({ id }) => id);
+  let pending = pendingRequests();
+  store.on('changed', () => { pending = pendingRequests(); });
+  // The result mailbox and ranked margin are two independent publications.
+  // Bridge a routed, still-working chat until its card catches up.
+  const handoffs = new Map();
   // A finished reply is unread until Stream has placed it (inline or on demand),
   // or a status pull delivered it. Match the reply, not just the thread ID.
   function shownReplies() {
@@ -40,31 +51,56 @@ export async function piClient(store, send) {
   }
   let shown = shownReplies();
   store.on('changed', () => { shown = shownReplies(); });
-  const finals = new Map();
-  async function finalReply(id) {
-    if (!id || !/^[\w-]+$/.test(id)) return -1;
+  const transcripts = new Map();
+  async function chatActivity(id) {
+    if (!id || !/^[\w-]+$/.test(id)) return null;
     const file = path.join(store.pi, 'chats', id + '.json');
     // Chats are atomically replaced. Don't parse every transcript on each margin poll.
     const stat = await fs.stat(file).catch(e => { if (e.code !== 'ENOENT') throw e; });
-    if (!stat) return -1;
+    if (!stat) return null;
     const version = `${stat.ino}:${stat.mtimeMs}:${stat.size}`;
-    if (finals.get(id)?.version === version) return finals.get(id).index;
+    if (transcripts.get(id)?.version === version) return transcripts.get(id);
     const c = await chat(id);
     const last = c?.messages.findLastIndex(m => m.role === 'assistant' && !m.partial) ?? -1;
     const index = c && last > c.messages.findLastIndex(m => m.role === 'user') ? last : -1;
-    finals.set(id, { version, index });
-    return index;
+    const activity = { version, index, state: c?.status, sources: new Set(c?.messages.filter(m => m.role === 'user').map(m => m.sourceBeatId)) };
+    transcripts.set(id, activity);
+    return activity;
   }
   const rawCards = async () => [...failures, ...await readJSON(marginFile, [])];
   async function openThreads() {
     const cards = await rawCards();
-    const idle = new Set(cards.filter(c => c.state === 'idle').map(c => c.chatId));
-    for (const id of finals.keys()) if (!idle.has(id)) finals.delete(id);
-    return Promise.all(cards.map(async card => {
+    const unresolved = new Set(pending);
+    const active = state => state === 'queued' || state === 'running';
+    const keep = new Set();
+    const ranked = await Promise.all(cards.map(async card => {
       const receipt = store.metadata.readResults?.[card.id];
       const read = Math.max(shown.get(card.chatId) ?? -1, receipt?.chatId === card.chatId ? receipt?.index ?? -1 : -1);
-      return { ...card, title: card.title.toLowerCase(), unread: card.state === 'idle' && await finalReply(card.chatId) > read };
+      const bridge = handoffs.has(card.chatId);
+      let state = card.state, activity;
+      if (state === 'idle' || bridge || (pending.length && card.chatId)) {
+        keep.add(card.chatId);
+        activity = await chatActivity(card.chatId);
+        if (bridge) {
+          if (!active(state) && active(activity?.state)) state = activity.state;
+          else handoffs.delete(card.chatId);
+        }
+        for (const id of unresolved) {
+          if (!activity?.sources.has(id)) continue;
+          if (active(activity.state)) state = activity.state;
+          if (active(state)) unresolved.delete(id);
+        }
+      }
+      return { ...card, state, title: card.title.toLowerCase(), unread: state === 'idle' && (activity?.index ?? -1) > read };
     }));
+    for (const [id, source] of handoffs) {
+      if (cards.some(card => card.chatId === id)) continue;
+      keep.add(id);
+      if (active((await chatActivity(id))?.state)) unresolved.add(source);
+      else handoffs.delete(id);
+    }
+    for (const id of transcripts.keys()) if (!keep.has(id)) transcripts.delete(id);
+    return [...Array.from(unresolved, id => ({ id: 'routing-' + id, state: 'routing', title: '', action: '', summary: '', unread: false })), ...ranked];
   }
   async function archiveThread({ threadId, stopActive, click }) {
     const failed = failures.find(row => row.id === threadId);
@@ -72,7 +108,13 @@ export async function piClient(store, send) {
     return control('archiveThreads', { ids: [threadId], stopActive: stopActive === true, click });
   }
   let previousMargin;
-  async function syncMargin() {
+  let marginQueue = Promise.resolve();
+  function syncMargin() {
+    const work = marginQueue.then(publishMargin);
+    marginQueue = work.catch(() => {});
+    return work;
+  }
+  async function publishMargin() {
     const cards = await openThreads();
     const version = JSON.stringify(cards);
     if (version !== previousMargin) {
@@ -168,6 +210,7 @@ export async function piClient(store, send) {
       if (store.beat(source)?.text === sourceText) Object.assign(store.metadata.beats[source],
         {kind:'bubble',author:'user',requestId:id,bubble:{role:'user',text}});
     });
+    await syncMargin();
     return id;
   }
   async function state(source) {
@@ -227,6 +270,7 @@ export async function piClient(store, send) {
           }
           m.appliedRequest = id;
         });
+        if (source != null && c && ['queued', 'running'].includes(c.status) && c.displaySourceId !== source) handoffs.set(c.id, source);
         if (opened != null) send({event:'open-block',id:opened,source});
         if (source == null || result.effects?.some(e=>e.kind==='chat')) await expandHistoricalChats(store);
         await fs.rename(path.join(box,'out',file),path.join(box,'applied',file));

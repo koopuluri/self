@@ -6,7 +6,7 @@ A local desktop stream for writing, browsing, media, and conversations with π.
 
 ## Use
 
-> π: Open threads stay in the left margin as you write. Click a title to bring the latest answer or activity into the stream. When your last ask has scrolled away, I include a short reminder. Send a bubble directly below the result to continue that chat. Orange means I need your input and red marks a failure or interruption. Hover or focus a row to archive it. For active work, “stop and archive” does both.
+> π: Move the pointer into the left margin to see open threads. While you write, only the number of active tasks and a spinner remain; when nothing is processing, the margin is blank. Sending a bubble starts the spinner immediately, before π knows which thread it belongs to. Typing also hides the hovered beat’s clock until you move the pointer again. Click a title to bring the latest answer or activity into the stream. When your last ask has scrolled away, I include a short reminder. Send a bubble directly below the result to continue that chat. Orange means I need your input and red marks a failure or interruption. Hover or focus a row to archive it. For active work, “stop and archive” does both.
 
 - In the document editor, Enter splits at the cursor and Backspace joins adjacent beats at their boundary. Paste inserts at the selection. Repeated line breaks from Notes count as one. Option-Up/Down moves the current beat or selected beats.
 - The left side of a split keeps its ID; inserting whole lines before existing text keeps the existing passage's ID with its text. Joining keeps links to both passages. Deleting a whole selected passage retires its ID. Undo and redo work during the editing session.

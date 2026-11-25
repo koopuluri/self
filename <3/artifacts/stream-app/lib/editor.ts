@@ -3,6 +3,7 @@ import { Decoration, DecorationSet, EditorView, WidgetType, ViewPlugin, keymap }
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { search, searchKeymap } from '@codemirror/search';
 import { deletePassages, identity, movePassage, setIdentity, trackIdentity, undoIdentity, type Identity } from './identity';
+import { beatClock } from './beat-clock';
 import { openImage } from './media-viewer';
 import { linkSpans, messageBody } from './chat-format';
 import type { Beat } from './types';
@@ -19,6 +20,12 @@ export type EditorContext = {
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
   const node = document.createElement(tag); node.className = className; node.textContent = text; return node;
 }
+class DayBreak extends WidgetType {
+  constructor(readonly day: string) { super(); }
+  eq(other: DayBreak) { return this.day === other.day; }
+  get estimatedHeight() { return 32 + 12 * 16; } // Divider height plus 6rem on each side.
+  toDOM() { return el('div', 'stream-day', this.day); }
+}
 class Block extends WidgetType {
   constructor(readonly beat: Beat, readonly version: string, readonly ctx: EditorContext) { super(); }
   eq(other: Block) { return this.beat.id === other.beat.id && this.version === other.version; }
@@ -26,6 +33,8 @@ class Block extends WidgetType {
   toDOM(view: EditorView) {
     const b = this.beat, outer = el('section', `beat-block ${b.kind}-block${b.redacted ? ' redacted' : ''}`);
     outer.dataset.beat = String(b.id);
+    const { time } = beatClock(b);
+    if (time) outer.dataset.startTime = time;
     const box = el('div', 'block-frame'); outer.append(box);
     if (b.kind === 'asset' && b.asset) {
       const file = b.asset.preview || b.asset.path;
@@ -93,12 +102,19 @@ export function makeEditor(parent: HTMLElement, ctx: EditorContext) {
   function blocks(state: EditorState): DecorationSet {
     const ranges = [];
     const ids = state.field(identity).ids;
+    let previousDay = '';
     for (let i = 0; i < ids.length; i++) {
       const beat = ctx.byId.get(ids[i]);
-      if (!beat || beat.kind === 'text') continue;
+      if (!beat) continue;
+      const { day } = beatClock(beat);
+      if (day && day !== previousDay) {
+        ranges.push(Decoration.widget({ widget: new DayBreak(day), block: true, side: -1 }).range(state.doc.line(i + 1).from));
+        previousDay = day;
+      }
+      if (beat.kind === 'text') continue;
       const line = state.doc.line(i + 1);
       if (!line.length) continue;
-      const version = JSON.stringify([beat.kind, beat.bubble, beat.chatId, beat.asset, beat.url, beat.filepath, beat.redacted]);
+      const version = JSON.stringify([beat.kind, beat.createdAt, beat.bubble, beat.chatId, beat.asset, beat.url, beat.filepath, beat.redacted]);
       ranges.push(Decoration.replace({ widget: new Block(beat, version, ctx), block: true, inclusive: true }).range(line.from, line.to));
     }
     return Decoration.set(ranges, true);
@@ -119,7 +135,8 @@ export function makeEditor(parent: HTMLElement, ctx: EditorContext) {
           const line = view.state.doc.lineAt(pos), id = view.state.field(identity).ids[line.number - 1], beat = ctx.byId.get(id);
           const composing = (!beat || beat.kind === 'text') && line.text.startsWith('/');
           if (composing) result.push(Decoration.replace({}).range(line.from, line.from + 1));
-          result.push(Decoration.line({ attributes: { 'data-beat': String(id), class: `${composing ? 'bubble-draft' : ''} ${beat?.redacted ? 'is-redacted' : ''} ${!line.text ? 'empty-beat' : ''}`, 'data-empty': beat?.deletedAt ? 'cleared' : '' } }).range(line.from));
+          const time = beat?.kind === 'text' && beatClock(beat).time;
+          result.push(Decoration.line({ attributes: { ...(time ? { 'data-start-time': time } : {}), 'data-beat': String(id), class: `${composing ? 'bubble-draft' : ''} ${beat?.redacted ? 'is-redacted' : ''} ${!line.text ? 'empty-beat' : ''}`, 'data-empty': beat?.deletedAt ? 'cleared' : '' } }).range(line.from));
           if (!beat || beat.kind === 'text') {
             for (const span of linkSpans(line.text)) result.push(Decoration.mark({
               tagName: 'a', attributes: { href: span.href, class: 'beat-link' },

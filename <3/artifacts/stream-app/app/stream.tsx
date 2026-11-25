@@ -12,6 +12,10 @@ import type { Reply, Snapshot, StreamEvent, ThreadCard } from '../lib/types';
 type Invitation = { source: number; slot: number; follow: boolean; delivering?: boolean };
 const invitationKey = 'stream.reply-invitation';
 
+function RoutingRow() {
+  return <div className="routing-row" role="status" aria-label="Routing message"><span className="thread-spinner" /></div>;
+}
+
 // Only fade a title when it actually runs out of room, including on hover.
 function MarginLabel({ title }: { title: string }) {
   const label = useRef<HTMLSpanElement>(null);
@@ -40,7 +44,12 @@ export default function Stream() {
   const [ready, setReady] = useState(false), [notice, setNotice] = useState('');
   const [dragging, setDragging] = useState(false);
   const [rows, dispatchRows] = useReducer(marginRows, []);
+  const [sending, setSending] = useState<Invitation[]>([]);
+  // The local row appears on Enter, before even the document save. The mailbox
+  // takes over once prompt() has published its durable routing row.
+  const localRouting = sending.filter(entry => !rows.some(({ card }) => card.id === `routing-${entry.source}`));
   const visibleRows = rows.filter(row => row.exit !== 'hidden');
+  const processing = localRouting.length + visibleRows.filter(({ card, removed }) => !removed && ['routing', 'running', 'queued'].includes(card.state)).length;
   async function archiveThread(card: ThreadCard) {
     dispatchRows({ type: 'archive', id: card.id });
     try {
@@ -199,10 +208,12 @@ export default function Stream() {
     const entry: Invitation = { source: id, slot, follow: true };
     setInvitation(entry);
     submitting.current.add(entry);
+    setSending(current => [...current, entry]);
     const text = content.slice(1).replaceAll('\u2028', '\n');
     const submit = submissionQueue.current.then(async () => {
       await flush();
       await call('prompt', { text, bubble: true, sourceBeatId: entry.source, slot: entry.slot, sourceText: content });
+      setSending(current => current.filter(row => row !== entry));
       if (waiting.current === entry) {
         const state = await call('replyState', { source: entry.source });
         if (state) await updateReply(state);
@@ -210,6 +221,7 @@ export default function Stream() {
       }
     });
     submissionQueue.current = submit.catch(e => {
+      setSending(current => current.filter(row => row !== entry));
       if (waiting.current === entry) setInvitation(null);
       error(e);
     });
@@ -426,35 +438,65 @@ export default function Stream() {
       disposed = true; cancelAnimationFrame(scrollFrame.current); scrollFrame.current = 0; unsubscribe?.(); view.current?.destroy(); window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('resize', onScroll); initialized.current = false; };
   }, []);
 
+  useEffect(() => {
+    // Chromium keeps :hover on the last hit target when macOS hides the mouse
+    // during typing. Scroll/layout and background updates aren't pointer input.
+    const root = document.documentElement;
+    const present = (e: PointerEvent) => root.toggleAttribute('data-pointer', e.pointerType !== 'touch');
+    const absent = () => root.removeAttribute('data-pointer');
+    const editing = (e: Event) => { if (host.current?.contains(e.target as Node)) absent(); };
+    window.addEventListener('pointermove', present, true);
+    window.addEventListener('pointerdown', present, true);
+    root.addEventListener('pointerleave', absent);
+    window.addEventListener('blur', absent);
+    const editEvents = ['keydown', 'beforeinput', 'compositionstart'] as const;
+    for (const type of editEvents) window.addEventListener(type, editing, true);
+    return () => {
+      window.removeEventListener('pointermove', present, true);
+      window.removeEventListener('pointerdown', present, true);
+      root.removeEventListener('pointerleave', absent);
+      window.removeEventListener('blur', absent);
+      for (const type of editEvents) window.removeEventListener(type, editing, true);
+      absent();
+    };
+  }, []);
+
   return <main onDragOver={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); setDragging(true); } }} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false); }} onDropCapture={event => {
       if (!event.dataTransfer.files.length) return;
       event.preventDefault(); event.stopPropagation(); setDragging(false);
       void attach([...event.dataTransfer.files]);
     }}>
     <div className="window-drag" aria-hidden="true" />
-    {visibleRows.length > 0 && <nav className="thread-margin" aria-label="Open threads">
-      {visibleRows.map(({ card, exit }) => {
-        const active = ['running', 'queued'].includes(card.state);
-        const state = active ? 'working' : card.unread ? 'unread' : card.state;
-        const archive = active ? 'stop and archive' : 'archive';
-        return <div className="thread-row" key={card.id} data-state={state} data-exit={exit} inert={!!exit}
-          onAnimationEnd={event => {
-            if (event.target === event.currentTarget && event.animationName === 'thread-exit') dispatchRows({ type: 'finish', id: card.id });
-          }}>
-          <button className="thread-title" title={card.title + ' · ' + card.action}
-            aria-label={card.title + ', ' + (card.unread ? 'unread result' : card.state.replaceAll('_', ' '))} onClick={() => void selectThread(card)}>
-            <MarginLabel title={card.title} />
-            {(active || card.unread) && <span className="thread-indicator" aria-hidden="true" />}
-          </button>
-          <button className="archive-thread" title={archive} aria-label={archive + ' ' + card.title}
-            onClick={() => void archiveThread(card)}>
-            <span>{archive}</span>
-            <svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-              {active ? <rect x="4" y="4" width="8" height="8" rx="1" /> : <path d="M2 3h12v3H2z M3.5 6v7h9V6 M6.5 8.5h3" />}
-            </svg>
-          </button>
-        </div>;
-      })}
+    {(visibleRows.length > 0 || localRouting.length > 0) && <nav className="thread-margin" aria-label="Open threads">
+      {processing > 0 && <div className="thread-summary" role="status" aria-label={`${processing} processing`}>
+        {processing}<span className="thread-spinner" aria-hidden="true" />
+      </div>}
+      <div className="thread-list">
+        {localRouting.map(entry => <RoutingRow key={`routing-${entry.source}`} />)}
+        {visibleRows.map(({ card, exit }) => {
+          if (card.state === 'routing') return <RoutingRow key={card.id} />;
+          const active = ['running', 'queued'].includes(card.state);
+          const state = active ? 'working' : card.unread ? 'unread' : card.state;
+          const archive = active ? 'stop and archive' : 'archive';
+          return <div className="thread-row" key={card.id} data-state={state} data-exit={exit} inert={!!exit}
+            onAnimationEnd={event => {
+              if (event.target === event.currentTarget && event.animationName === 'thread-exit') dispatchRows({ type: 'finish', id: card.id });
+            }}>
+            <button className="thread-title" title={card.title + ' · ' + card.action}
+              aria-label={card.title + ', ' + (card.unread ? 'unread result' : card.state.replaceAll('_', ' '))} onClick={() => void selectThread(card)}>
+              <MarginLabel title={card.title} />
+              {(active || card.unread) && <span className={active ? "thread-indicator thread-spinner" : "thread-indicator"} aria-hidden="true" />}
+            </button>
+            <button className="archive-thread" title={archive} aria-label={archive + ' ' + card.title}
+              onClick={() => void archiveThread(card)}>
+              <span>{archive}</span>
+              <svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+                {active ? <rect x="4" y="4" width="8" height="8" rx="1" /> : <path d="M2 3h12v3H2z M3.5 6v7h9V6 M6.5 8.5h3" />}
+              </svg>
+            </button>
+          </div>;
+        })}
+      </div>
     </nav>}
     <div ref={host} className="editor-host" onClick={event => { const element = (event.target as HTMLElement).closest<HTMLElement>('[data-beat]'); if (element?.dataset.beat) focus(Number(element.dataset.beat)); }} />
     {!ready && <div className="opening">{notice || 'opening your stream…'}</div>}
