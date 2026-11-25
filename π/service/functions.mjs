@@ -44,12 +44,12 @@ export function beatContext(beats) {
 
 export async function processMessage(agent, config, text, beats, link, lastStatus) {
   const open = (await agent.trackedThreads()).filter(t => t.lifecycle !== 'archived');
-  const threads = open.map(t => ({ ...indexEntry(t), needsNetworkReview: Boolean(t.networkRequest) }));
+  const threads = open.map(indexEntry);
   const data = { message: text, beats, threads, lastStatus };
   const callId = randomUUID();
   const decision = await judgment(agent, 'process-message', config, data,
-    '{"action":"new|resume|steer|follow-up|abort|check-in|result|status-history|open-page|review-network","threadId":string|null,"beatIds":number[],"tier":"easy|medium|hard","title":string,"count"?:number,"url"?:string}. For result choose the thread ID from the delivered list or open tasks, or null if unclear. For status-history supply count (1 to 50). For open-page supply an explicit or confidently resolved http(s) URL.', { ...link, callId }, new AbortController().signal);
-  const taskActions = ['resume','steer','follow-up','abort','review-network'];
+    '{"action":"new|resume|steer|follow-up|abort|check-in|result|status-history|open-page","threadId":string|null,"beatIds":number[],"tier":"easy|medium|hard","title":string,"count"?:number,"url"?:string}. For result choose the thread ID from the delivered list or open tasks, or null if unclear. For status-history supply count (1 to 50). For open-page supply an explicit or confidently resolved http(s) URL.', { ...link, callId }, new AbortController().signal);
+  const taskActions = ['resume','steer','follow-up','abort'];
   const known = open.some(t => t.id === decision?.threadId);
   const fromStatus = lastStatus?.open.some(t => t.id === decision?.threadId);
   // Reading a result can archive its thread while the delivered list still names it.
@@ -72,13 +72,23 @@ export async function processMessage(agent, config, text, beats, link, lastStatu
 export async function organizeThreads(agent, job, outcome) {
   const { thread } = job;
   const link = { traceId: job.traceId, triggerThreadId: thread.id, triggerCallId: job.taskCallId };
-  const card = await judgment(agent, 'update-thread', job.config, { task: indexEntry(thread), outcome },
-    '{"title":string,"summary":string,"nextAction":string}', link, job.controller.signal);
+  const messages = job.chat.messages;
+  const ask = messages.findLastIndex(m => m.role === 'user' && m.traceId === job.traceId);
+  const exchange = ask < 0 ? [] : messages.slice(Math.max(0, ask - 4), ask + 1)
+    .map(({ role, text }) => ({ role, text: text.slice(0, 6000) }));
+  const card = await judgment(agent, 'update-thread', job.config, { task: indexEntry(thread),
+    previous_human_context: thread.human_context ?? '', exchange,
+    context: (thread.context ?? []).slice(-5).map(({ text }) => text?.slice(0, 2400)), outcome },
+    '{"title":string,"summary":string,"human_context":string,"nextAction":string}', link, job.controller.signal);
   if (![card.title, card.summary, card.nextAction].every(v => typeof v === 'string')) throw new Error('Invalid thread card');
   job.controller.signal.throwIfAborted();
   if (thread.inbox?.length) return;
   thread.title = card.title.trim() || thread.title;
   thread.summary = card.summary;
+  if (ask >= 0 && typeof card.human_context === 'string' && card.human_context.trim()) {
+    thread.human_context = card.human_context.trim();
+    thread.humanContextTraceId = job.traceId;
+  }
   thread.nextAction = card.nextAction;
   await agent.saveThread(thread);
   await eventLog(agent, { ...link, function: 'update-thread', affectedThreadIds: [thread.id] });
@@ -101,7 +111,7 @@ function applyRanking(open, ranking) {
 async function statusCards(agent) {
   const threads = await agent.trackedThreads();
   const open = threads.filter(t => t.lifecycle !== 'archived').map(t => ({ id: t.id, title: t.title,
-    chatId: t.chatId, summary: t.summary || '', state: t.status, progress: t.progress, action: actionFor(t) }));
+    chatId: t.chatId, human_context: t.human_context, humanContextTraceId: t.humanContextTraceId, summary: t.summary || '', state: t.status, progress: t.progress, action: actionFor(t) }));
   const closed = threads.flatMap(t => t.closures ?? []).filter(c => !agent.store.metadata.reportedClosures?.[c.closureId]);
   return { open, closed };
 }

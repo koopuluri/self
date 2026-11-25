@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
+import http from 'node:http';
 import path from 'node:path';
 import { refreshStatusRanking } from '../functions.mjs';
 import { Coordinator } from '../agent.mjs';
@@ -45,7 +46,7 @@ function route(data, action, threadId) {
   return answer({ action, threadId, title: data.message, tier: 'medium', beatIds: data.beats.slice(-1).map(b => b.id) });
 }
 function organize(data) {
-  return answer({ title: data.task.title, summary: data.outcome.answer || 'Reading', nextAction: 'read the result', disposition: 'read' });
+  return answer({ title: data.task.title, human_context: data.exchange.at(-1)?.text, summary: data.outcome.answer || 'Reading', nextAction: 'read the result', disposition: 'read' });
 }
 
 test('router selects an open thread across writing beats; organizer holds the result through restart', async t => {
@@ -64,6 +65,9 @@ test('router selects an open thread across writing beats; organizer holds the re
   const second = await send(agent, store, 'explain the scroll fix');
   await idle(agent);
   assert.equal(chat.threadId, second.threadId);
+  const updated = await agent.thread(chat.threadId);
+  assert.equal(updated.human_context, 'explain the scroll fix');
+  assert.ok(updated.humanContextTraceId);
   const reopened = new Coordinator(store);
   await reopened.initialized;
   reopened.available = () => false;
@@ -308,30 +312,33 @@ test('a completed action stays open across concurrent status deliveries', async 
   assert.ok(store.metadata.statusHistory.every(r => r.open.some(t => t.title === 'filed receipt')));
 });
 
-test('network work yields without opening a dialog until the writer requests review', async t => {
+test('a task can use the account home, Git metadata and network outside self', { skip: process.platform !== 'darwin' }, async t => {
   const { agent, store } = await fixture(t);
-  await fs.mkdir(path.join(store.root, '<3/artifacts/stream-app'), { recursive: true });
-  let dialogs = 0, runs = 0;
-  agent.approveNetwork = async request => { dialogs++; assert.equal(request.command, 'pwd'); return false; };
+  const elsewhere = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-shell-repo-'));
+  t.after(() => fs.rm(elsewhere, { recursive: true, force: true }));
+  const server = http.createServer((_req, res) => res.end('connected'));
+  await new Promise((resolve, reject) => server.once('error', reject).listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  let executed = false;
   useMock(agent, context => {
-    if (context.systemPrompt.includes('name: process-message')) {
-      const d = JSON.parse(context.messages[0].content);
-      return d.threads.length ? route(d, 'review-network', d.threads[0].id) : route(d, 'new');
-    }
+    if (context.systemPrompt.includes('name: process-message')) return route(JSON.parse(context.messages[0].content), 'new');
     if (context.systemPrompt.includes('name: update-thread')) return organize(JSON.parse(context.messages[0].content));
-    if (++runs === 1) return modelReply([{ type: 'toolCall', id: 'net', name: 'run_shell', arguments: { command: 'pwd', cwd: '.', network: true } }], 'toolUse');
-    assert.match(context.systemPrompt, /"allowed":false/);
-    return answer('declined');
+    if (!executed) {
+      executed = true;
+      const command = 'git init -q && git rev-parse --git-dir && echo "$HOME" && curl -fsS http://127.0.0.1:' + server.address().port;
+      return modelReply([{ type: 'toolCall', id: 'shell', name: 'run_shell', arguments: { command, cwd: elsewhere } }], 'toolUse');
+    }
+    return answer('done');
   });
-  const task = await send(agent, store, 'research the site');
+  const task = await send(agent, store, 'check the fixture');
   await idle(agent);
-  assert.equal((await agent.thread(task.threadId)).status, 'waiting_for_you');
-  assert.equal(dialogs, 0);
-  assert.equal(store.snapshot().beats.filter(b => b.bubble?.role === 'assistant').length, 0);
-  await send(agent, store, 'let me review the network request');
-  await idle(agent);
-  assert.equal(dialogs, 1);
-  assert.equal((await agent.thread(task.threadId)).networkRequest, undefined);
+  const thread = await agent.thread(task.threadId);
+  assert.equal(thread.status, 'idle');
+  const result = thread.messages.find(m => m.toolCallId === 'shell' && m.role === 'toolResult');
+  const shell = JSON.parse(result.content[0].text);
+  assert.equal(shell.exitCode, 0, shell.output);
+  assert.equal(shell.output.trim(), ['.git', os.homedir(), 'connected'].join('\n'));
+  assert.ok((await fs.stat(path.join(elsewhere, '.git', 'HEAD'))).isFile());
 });
 
 test('a large tool result triggers SDK compaction mid-run; restart resumes without repeating the tool', async t => {

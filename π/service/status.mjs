@@ -30,7 +30,7 @@ export function offlinePull(text, lastStatus) {
 export function actionFor(t) {
   const actions = { queued: 'nothing needed yet', running: 'nothing needed yet', failed: 'read the error and decide whether to retry',
     interrupted: 'decide whether to resume', stopped: 'decide whether to resume', waiting_for_configuration: 'connect the model' };
-  if (t.networkRequest) return 'review the request for network access';
+  if (t.networkRequest) return 'network access is enabled. resume this task to continue.';
   if (t.status === 'waiting_for_you') return t.question || 'answer the question';
   return actions[t.status] || t.nextAction || 'read the result';
 }

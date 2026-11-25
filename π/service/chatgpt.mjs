@@ -28,9 +28,9 @@ export function planCallError(detail, { httpStatus, code }) {
 export function modelForPlan(catalog, id) {
   const known = catalog.getModel('openai', id);
   if (known?.api === 'openai-responses') return known;
-  // The account catalog can advertise a newer text model than the bundled SDK.
+  // The account catalog can advertise a newer model than the bundled SDK.
   return { id, name: id, provider: 'openai', api: 'openai-responses', baseUrl: 'https://api.openai.com/v1',
-    input: ['text'], reasoning: false, maxTokens: 8192, contextWindow: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
+    input: ['text', 'image'], reasoning: false, maxTokens: 8192, contextWindow: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
 }
 
 // Plan access supports local functions inside a namespace or additional_tools items.

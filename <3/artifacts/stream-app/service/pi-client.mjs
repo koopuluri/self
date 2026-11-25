@@ -28,7 +28,44 @@ export async function piClient(store, send) {
   }
   let failures = failedRequests();
   store.on('changed', () => { failures = failedRequests(); });
-  const openThreads = async () => [...failures, ...await readJSON(marginFile, [])];
+  // A finished reply is unread until Stream has placed it (inline or on demand),
+  // or a status pull delivered it. Match the reply, not just the thread ID.
+  function shownReplies() {
+    const shown = new Map();
+    for (const beat of Object.values(store.metadata.beats)) {
+      if (beat.chatId && beat.bubble?.role === 'assistant' && Number.isInteger(beat.messageIndex))
+        shown.set(beat.chatId, Math.max(shown.get(beat.chatId) ?? -1, beat.messageIndex));
+    }
+    return shown;
+  }
+  let shown = shownReplies();
+  store.on('changed', () => { shown = shownReplies(); });
+  const finals = new Map();
+  async function finalReply(id) {
+    if (!id || !/^[\w-]+$/.test(id)) return -1;
+    const file = path.join(store.pi, 'chats', id + '.json');
+    // Chats are atomically replaced. Don't parse every transcript on each margin poll.
+    const stat = await fs.stat(file).catch(e => { if (e.code !== 'ENOENT') throw e; });
+    if (!stat) return -1;
+    const version = `${stat.ino}:${stat.mtimeMs}:${stat.size}`;
+    if (finals.get(id)?.version === version) return finals.get(id).index;
+    const c = await chat(id);
+    const last = c?.messages.findLastIndex(m => m.role === 'assistant' && !m.partial) ?? -1;
+    const index = c && last > c.messages.findLastIndex(m => m.role === 'user') ? last : -1;
+    finals.set(id, { version, index });
+    return index;
+  }
+  const rawCards = async () => [...failures, ...await readJSON(marginFile, [])];
+  async function openThreads() {
+    const cards = await rawCards();
+    const idle = new Set(cards.filter(c => c.state === 'idle').map(c => c.chatId));
+    for (const id of finals.keys()) if (!idle.has(id)) finals.delete(id);
+    return Promise.all(cards.map(async card => {
+      const receipt = store.metadata.readResults?.[card.id];
+      const read = Math.max(shown.get(card.chatId) ?? -1, receipt?.chatId === card.chatId ? receipt?.index ?? -1 : -1);
+      return { ...card, title: card.title.toLowerCase(), unread: card.state === 'idle' && await finalReply(card.chatId) > read };
+    }));
+  }
   async function archiveThread({ threadId, stopActive }) {
     const failed = failures.find(row => row.id === threadId);
     if (failed) return store.transact(() => { store.metadata.beats[failed.source].failureArchived = true; });
@@ -44,7 +81,7 @@ export async function piClient(store, send) {
     }
   }
   async function showThread({ threadId, visible }) {
-    const card = (await openThreads()).find(t => t.id === threadId);
+    const card = (await rawCards()).find(t => t.id === threadId);
     if (!card) throw new Error('This thread is no longer open.');
     if (card.source !== undefined) {
       return store.transact(() => {
@@ -71,8 +108,9 @@ export async function piClient(store, send) {
       });
       let first;
       if (!inView) {
-        const reminder = card.summary || c.messages[lastUser]?.text;
-        first = bubble([card.title, reminder !== card.title && reminder].filter(Boolean).join('\n\n'));
+        const ask = c.messages[lastUser];
+        const reminder = (ask?.traceId && ask.traceId === card.humanContextTraceId && card.human_context) || ask?.text;
+        first = bubble([card.title.toLowerCase(), reminder !== card.title && reminder].filter(Boolean).join('\n\n'));
       }
       const result = !active && latest > lastUser
         ? placeMessage(store, c, latest, null)

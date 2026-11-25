@@ -29,7 +29,7 @@ class Context extends StreamStore {
   async remove(id) { this.effects.push({ kind: 'remove', id }); }
 }
 
-export async function startWorker(root, plan, approveNetwork, shouldRetire = async () => false, retire = () => {}) {
+export async function startWorker(root, plan, shouldRetire = async () => false, retire = () => {}) {
   globalThis.fetch = observeModelFetch(globalThis.fetch);
   const store = new Context(root);
   const box = path.join(store.pi, '.runtime/mailbox-v1');
@@ -38,7 +38,7 @@ export async function startWorker(root, plan, approveNetwork, shouldRetire = asy
   const receipts = () => readJSON(path.join(store.pi, '.runtime/delivery.json'), {});
   store.receipts = await receipts();
   Object.assign(store.metadata, store.receipts);
-  const agent = new Coordinator(store, plan, approveNetwork);
+  const agent = new Coordinator(store, plan);
   await agent.initialized;
   const writeResult = (file, result) => atomicWrite(path.join(box,'out',file), JSON.stringify(result));
   // A previous process might have reached an external tool. Recover its

@@ -82,9 +82,9 @@ test('the margin restores context on demand and binds the adjacent reply to its 
   const events = [];
   const client = await piClient(store, event => events.push(event));
   const source = await store.append('/which draft?');
-  const card = { id: 'thread', chatId: 'draft', title: 'choose a draft', summary: 'comparing two drafts', state: 'idle' };
+  const card = { id: 'thread', chatId: 'draft', title: 'Choose a Draft', summary: 'comparing two drafts', human_context: 'which draft should you use?', humanContextTraceId: 'turn', state: 'idle' };
   const chat = { id: 'draft', threadId: 'thread', messages: [
-    { role: 'user', text: 'which draft?' }, { role: 'assistant', text: 'the second draft' },
+    { role: 'user', text: 'which draft?', traceId: 'turn' }, { role: 'assistant', text: 'the second draft' },
   ] };
   await fs.mkdir(path.join(store.pi, 'chats'), { recursive: true });
   await fs.writeFile(path.join(store.pi, 'chats/draft.json'), JSON.stringify(chat));
@@ -94,14 +94,22 @@ test('the margin restores context on demand and binds the adjacent reply to its 
   }));
   await client.syncMargin();
   await client.syncMargin();
-  assert.deepEqual(events, [{ event: 'open-threads', cards: [card] }]);
+  assert.deepEqual(events, [{ event: 'open-threads', cards: [{ ...card, title: 'choose a draft', unread: true }] }]);
   const shown = await client.showThread({ threadId: card.id, visible: [source] });
   assert.equal(store.metadata.beats[shown.first].bubble.text, 'the second draft');
+  assert.equal((await client.openThreads())[0].unread, false);
   const tail = await client.showThread({ threadId: card.id, visible: [] });
-  assert.match(store.metadata.beats[tail.first].bubble.text, /choose a draft\n\ncomparing two drafts/);
+  assert.match(store.metadata.beats[tail.first].bubble.text, /^choose a draft\n\nwhich draft should you use\?$/);
   await store.edit([{ id: tail.slot, before: '', text: '/yes' }]);
   const request = await client.prompt({ bubble: true, sourceBeatId: tail.slot, sourceText: '/yes', text: 'yes' });
   const queued = JSON.parse(await fs.readFile(path.join(store.pi, '.runtime/mailbox-v1/in', request + '.json')));
   assert.equal(queued.args.chatId, chat.id);
   assert.equal(await fs.readFile(path.join(store.pi, 'chats/draft.json'), 'utf8'), JSON.stringify(chat));
+  chat.messages.push({ role: 'user', text: 'next?' }, { role: 'assistant', text: 'send it' });
+  await fs.writeFile(path.join(store.pi, 'chats/draft.json'), JSON.stringify(chat));
+  assert.equal((await client.openThreads())[0].unread, true);
+  const next = await client.showThread({ threadId: card.id, visible: [] });
+  assert.equal(store.metadata.beats[next.first].bubble.text, 'choose a draft\n\nnext?');
+  await store.transact(() => { store.metadata.readResults = { thread: { chatId: 'draft', index: 3 } }; });
+  assert.equal((await client.openThreads())[0].unread, false);
 });

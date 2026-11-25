@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { history } from '@codemirror/commands';
 import { EditorView } from '@codemirror/view';
 import { editorHistory, makeEditor, remote, sync, type EditorContext } from '../lib/editor';
@@ -10,6 +10,20 @@ import type { Reply, Snapshot, StreamEvent, ThreadCard } from '../lib/types';
 
 type Invitation = { source: number; slot: number; follow: boolean; delivering?: boolean };
 const invitationKey = 'stream.reply-invitation';
+
+// Only fade a title when it actually runs out of room, including on hover.
+function MarginLabel({ title }: { title: string }) {
+  const label = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const clip = label.current!, text = clip.firstElementChild!;
+    const measure = () => clip.toggleAttribute('data-overflow', text.getBoundingClientRect().width > clip.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(clip); observer.observe(text);
+    return () => observer.disconnect();
+  }, [title]);
+  return <span className="thread-label" ref={label}><span>{title}</span></span>;
+}
 
 export default function Stream() {
   const host = useRef<HTMLDivElement>(null), view = useRef<EditorView|null>(null), context = useRef<EditorContext|null>(null);
@@ -411,12 +425,21 @@ export default function Stream() {
     {cards.length > 0 && <nav className="thread-margin" aria-label="Open threads">
       {cards.map(card => {
         const active = ['running', 'queued'].includes(card.state);
-        const state = active ? 'working' : card.state;
+        const state = active ? 'working' : card.unread ? 'unread' : card.state;
+        const archive = active ? 'stop and archive' : 'archive';
         return <div className="thread-row" key={card.id} data-state={state}>
           <button className="thread-title" title={card.title + ' · ' + card.action}
-            aria-label={card.title + ', ' + card.state.replaceAll('_', ' ')} onClick={() => void selectThread(card)}>{card.title}</button>
-          <button className="archive-thread" aria-label={(active ? 'Stop and archive ' : 'Archive ') + card.title}
-            onClick={() => void selectThread(card, true)}>{active ? 'stop and archive' : 'archive'}</button>
+            aria-label={card.title + ', ' + (card.unread ? 'unread result' : card.state.replaceAll('_', ' '))} onClick={() => void selectThread(card)}>
+            <MarginLabel title={card.title} />
+            {(active || card.unread) && <span className="thread-indicator" aria-hidden="true" />}
+          </button>
+          <button className="archive-thread" title={archive} aria-label={archive + ' ' + card.title}
+            onClick={() => void selectThread(card, true)}>
+            <span>{archive}</span>
+            <svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+              {active ? <rect x="4" y="4" width="8" height="8" rx="1" /> : <path d="M2 3h12v3H2z M3.5 6v7h9V6 M6.5 8.5h3" />}
+            </svg>
+          </button>
         </div>;
       })}
     </nav>}

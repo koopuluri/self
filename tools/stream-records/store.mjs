@@ -154,7 +154,7 @@ export class StreamStore extends EventEmitter {
     return id;
   }
   beat(id) { return this.beats.find(b => b.id === id); }
-  precedingTextBeats(before, count) {
+  precedingTextBeats(before, count, includeMedia = false) {
     if (!Number.isSafeInteger(count) || count < 1 || count > 50) throw new Error('Choose a count from 1 to 50.');
     let end = this.beats.length;
     if (before != null) {
@@ -165,7 +165,8 @@ export class StreamStore extends EventEmitter {
     const found = [];
     for (let index = end - 1; index >= 0 && found.length < count; index--) {
       const beat = this.beats[index];
-      if (this.metadata.beats[beat.id].kind === 'text' && beat.text.trim()) found.push({ id: beat.id, text: beat.text });
+      if (includeMedia && this.metadata.beats[beat.id].kind === 'asset') found.push({ ...beat, kind: 'asset' });
+      else if (this.metadata.beats[beat.id].kind === 'text' && beat.text.trim()) found.push({ id: beat.id, text: beat.text });
     }
     return found.reverse();
   }

@@ -20,6 +20,9 @@ export async function modelCall(agent, config, model, context, signal, link, onD
     if (!model) throw new Error('The selected model is unavailable.');
     const shared = await fs.readFile(agent.instructionsFile, 'utf8');
     context = { ...context, systemPrompt: `Shared workspace instructions (AGENTS.md):\n${shared.trimEnd()}\n\nInstructions for this call:\n${context.systemPrompt ?? ''}` };
+    for (const message of context.messages ?? []) if (Array.isArray(message.content)) {
+      for (const block of message.content) if (block.type === 'image' && block.data) trace.secrets.add(block.data);
+    }
     const options = { maxTokens: 8192, reasoning: config.reasoning === 'default' ? undefined : config.reasoning, signal: AbortSignal.any([signal, AbortSignal.timeout(180000)]) };
     if (plan) {
       const token = await agent.plan('grant');

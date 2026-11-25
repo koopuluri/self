@@ -106,7 +106,10 @@ test('plan turns use Responses with local tools, retain a resumable thread, and 
   const agent = new Coordinator(store, plan);
   const id = await agent.prompt({ text: 'connect my ChatGPT' });
   assert.equal((await agent.chat(id)).status, 'running');
-  await store.append('Fixture passage');
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRqkAAAAASUVORK5CYII=';
+  const file = path.join(store.root, 'fixture.png');
+  await fs.writeFile(file, Buffer.from(png, 'base64'));
+  const beat = await store.importAsset(file);
   complete(); await agent.connectionTask;
   assert.equal((await agent.status()).auth, 'chatgpt-plan');
   const requests = [];
@@ -126,7 +129,7 @@ test('plan turns use Responses with local tools, retain a resumable thread, and 
       const failed = { type: 'response.failed', response: { status: 'failed', model: 'gpt-5.4-mini', error: { code: 'server_error', message: secret } } };
       return new Response('data: ' + JSON.stringify(failed) + '\n\n', { headers: { 'content-type': 'text/event-stream', 'x-request-id': 'req_fixture' } });
     }
-    const item = requests.length === 1 ? { type: 'function_call', id: 'fc_1', call_id: 'call_1', name: 'read_beat', namespace: 'stream', arguments: '{"id":0}' } :
+    const item = requests.length === 1 ? { type: 'function_call', id: 'fc_1', call_id: 'call_1', name: 'view_image', namespace: 'stream', arguments: JSON.stringify({ beat_id: beat }) } :
       { type: 'message', role: 'assistant', id: 'msg_2', content: [{ type: 'output_text', text: 'Saved reply.' }] };
     const events = [
       { type: 'response.output_item.added', output_index: 0, item },
@@ -142,7 +145,7 @@ test('plan turns use Responses with local tools, retain a resumable thread, and 
   await agent.prompt({ chatId: id, text: 'Read my fixture.' }); await idle(agent);
   const chat = await agent.chat(id);
   assert.equal(chat.messages.at(-1).text, 'Saved reply.');
-  assert.ok(requests[1].input.some(item => item.type === 'function_call_output' && JSON.stringify(item).includes('Fixture passage')));
+  assert.ok(requests[1].input.some(item => item.type === 'function_call_output' && item.output.some(block => block.type === 'input_image' && block.image_url === 'data:image/png;base64,' + png)));
   const resumed = new Coordinator(store, plan);
   await resumed.localControl('reasoning default');
   await resumed.prompt({ chatId: id, text: 'Continue here.' }); await idle(resumed);
@@ -151,7 +154,7 @@ test('plan turns use Responses with local tools, retain a resumable thread, and 
   assert.equal(finished.status, 'failed');
   assert.match(finished.messages.at(-1).text, /usage limit/);
   const thread = await resumed.thread(chat.threadId);
-  assert.ok(thread.messages.some(m => m.role === 'toolResult' && m.toolName === 'read_beat'));
+  assert.ok(thread.messages.some(m => m.role === 'toolResult' && m.toolName === 'view_image'));
   assert.ok(requests[2].input.some(item => JSON.stringify(item).includes('Saved reply.')));
   const md = await fs.readFile(path.join(store.pi, 'chats', id + '.md'), 'utf8');
   assert.match(md, /Saved reply/); assert.match(md, /Continue here/);
@@ -164,6 +167,7 @@ test('plan turns use Responses with local tools, retain a resumable thread, and 
   assert.equal(rejected.failureDetails.httpAttempts[0].body, JSON.stringify({ error: { code: 'subscription_sharing_usage_limit_exceeded', message: 'subscription_sharing_usage_limit_exceeded [redacted]' } }));
   assert.equal(rejected.error, rejected.failureDetails.sdkMessage);
   assert.ok(!JSON.stringify([finished, thread, md, logs]).includes(secret));
+  assert.ok(!JSON.stringify([requests[0], requests[2], thread, logs]).includes(png));
   await resumed.prompt({ chatId: id, text: 'Continue the saved turn.' }); await idle(resumed);
   const failure = (await resumed.chat(id)).messages.at(-1);
   assert.equal(failure.source, 'system-status');
