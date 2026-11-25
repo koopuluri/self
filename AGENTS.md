@@ -37,7 +37,7 @@ When the user says "process notes" (or similar) about a document containing note
 
 ## Publishing self
 
-Prepare all changes, propose a short lowercase commit message, and wait for approval of that exact message before committing, uploading, pushing, or deploying. Changes to source or scope require a fresh plan.
+An explicit request to commit or push authorizes the named action on the reviewed scope. Choose a short lowercase commit message without previewing it or asking for approval. Afterward, report the short commit ID and exact subject, and whether the requested push succeeded. A push request does not authorize a media upload or deployment; get separate approval for those. If the scope changes, review it again.
 
 Material deliberately brought into self is public by default, after publication review. Private thinking remains outside this workspace. Credentials, sessions, local app state, dependencies and builds are excluded. Review the outgoing source, history, media, metadata and related references; a clean automated scan is not a privacy guarantee.
 
