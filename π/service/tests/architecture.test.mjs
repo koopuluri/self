@@ -407,7 +407,13 @@ test('a check-in reads live cards while model routing and ranking are blocked', 
     assert.equal(calls, 1);
   } finally { release.resolve(); await ranking; }
   assert.equal((await send(agent, store, 'status')).messages.at(-1).text, '1. one task (which day?)');
-  assert.deepEqual(await agent.archiveThreads([thread.id]), [thread.id]);
+  const click = { at: '2026-11-25T00:45:02.769Z', runStateAtClick: 'waiting_for_you', focusedBeatId: 0 };
+  assert.deepEqual(await agent.archiveThreads([thread.id], false, click), [thread.id]);
+  assert.deepEqual(await agent.archiveThreads([thread.id], false, click), []);
+  const saved = JSON.parse(await fs.readFile(path.join(store.pi, 'threads', thread.id + '.json'), 'utf8'));
+  assert.equal(saved.status, 'archived');
+  assert.deepEqual(saved.session.filter(e => e.customType === 'thread.archived').map(e => e.data),
+    [{ ...click, threadId: thread.id, actor: 'writer', source: 'left-pane', action: 'archive', stoppedRun: false }]);
   assert.equal((await send(agent, store, '')).messages.at(-1).text, 'nothing open or newly closed.');
   assert.equal((await agent.chat(chat.id)).id, chat.id);
   assert.equal(calls, 1);

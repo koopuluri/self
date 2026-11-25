@@ -28,6 +28,10 @@ function manager(thread, cwd) {
   return state.manager;
 }
 
+export function recordArchive(thread, cwd, event) {
+  manager(thread, cwd).appendCustomEntry('thread.archived', event);
+}
+
 export function serializeThread(thread, cwd) {
   const pi = manager(thread, cwd);
   const { messages, lifecycle, status, ...fields } = thread;

@@ -66,10 +66,10 @@ export async function piClient(store, send) {
       return { ...card, title: card.title.toLowerCase(), unread: card.state === 'idle' && await finalReply(card.chatId) > read };
     }));
   }
-  async function archiveThread({ threadId, stopActive }) {
+  async function archiveThread({ threadId, stopActive, click }) {
     const failed = failures.find(row => row.id === threadId);
     if (failed) return store.transact(() => { store.metadata.beats[failed.source].failureArchived = true; });
-    return control('archiveThreads', { ids: [threadId], stopActive: stopActive === true });
+    return control('archiveThreads', { ids: [threadId], stopActive: stopActive === true, click });
   }
   let previousMargin;
   async function syncMargin() {

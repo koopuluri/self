@@ -9,7 +9,7 @@ import { pathToFileURL } from 'node:url';
 import { builtinModels } from '@earendil-works/pi-ai/providers/all';
 import { modelForPlan } from './chatgpt.mjs';
 import { modelCall } from './model-call.mjs';
-import { hydrate, serializeThread, taskContext } from './thread-session.mjs';
+import { hydrate, recordArchive, serializeThread, taskContext } from './thread-session.mjs';
 import { processMessage, organizeThreads, composeStatus, functionConfig, eventLog, sharedWorkspaceRoot, beatContext } from './functions.mjs';
 import { actionFor, isStatusCheck, offlinePull, recentStatuses, reportText } from './status.mjs';
 import { validateToolCall } from '@earendil-works/pi-ai';
@@ -230,15 +230,20 @@ export class Coordinator {
     }
     return true;
   }
-  async archiveThreads(ids, stopActive = true) {
+  async archiveThreads(ids, stopActive = true, click) {
     const archived = [];
     for (const id of ids) {
       const thread = await this.thread(id);
       if (thread.lifecycle === 'archived') continue;
       if (!stopActive && ['running', 'queued'].includes(thread.status)) throw new Error('This thread is now running. Choose stop and archive.');
-      await this.stop(thread.chatId);
+      const stoppedRun = await this.stop(thread.chatId);
       // The run's final save must finish before archiving its session.
       while (this.running.has(id)) await new Promise(resolve => setTimeout(resolve, 25));
+      if (thread.lifecycle === 'archived') continue;
+      recordArchive(thread, this.store.root, { threadId: id, actor: 'writer', source: 'left-pane',
+        at: click?.at ?? stamp(), runStateAtClick: click?.runStateAtClick ?? null,
+        focusedBeatId: click?.focusedBeatId ?? null,
+        action: stopActive ? 'stop-and-archive' : 'archive', stoppedRun });
       thread.lifecycle = 'archived';
       delete thread.inbox;
       delete thread.closeAfterRead;

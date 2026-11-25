@@ -44,7 +44,10 @@ export default function Stream() {
   async function archiveThread(card: ThreadCard) {
     dispatchRows({ type: 'archive', id: card.id });
     try {
-      await call('archiveThread', { threadId: card.id, stopActive: ['running', 'queued'].includes(card.state) });
+      const state = view.current?.state;
+      const focusedBeatId = state?.field(identity).ids[state.doc.lineAt(state.selection.main.head).number - 1] ?? null;
+      await call('archiveThread', { threadId: card.id, stopActive: ['running', 'queued'].includes(card.state),
+        click: { at: new Date().toISOString(), runStateAtClick: card.state, focusedBeatId } });
     } catch (e) {
       dispatchRows({ type: 'restore', id: card.id });
       error(e);
