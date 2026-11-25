@@ -1,11 +1,12 @@
 'use client';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
 import { history } from '@codemirror/commands';
 import { EditorView } from '@codemirror/view';
 import { editorHistory, makeEditor, remote, sync, type EditorContext } from '../lib/editor';
 import { closeBlock, openFileOrBrowser } from '../lib/block-viewer';
 import { mergeEmbeds } from '../lib/merge-embeds';
 import { identity, setIdentity } from '../lib/identity';
+import { marginRows } from '../lib/margin-rows';
 import type { Reply, Snapshot, StreamEvent, ThreadCard } from '../lib/types';
 
 type Invitation = { source: number; slot: number; follow: boolean; delivering?: boolean };
@@ -38,17 +39,23 @@ export default function Stream() {
   const scrollFrame = useRef(0);
   const [ready, setReady] = useState(false), [notice, setNotice] = useState('');
   const [dragging, setDragging] = useState(false);
-  const [cards, setCards] = useState<ThreadCard[]>([]);
+  const [rows, dispatchRows] = useReducer(marginRows, []);
+  const visibleRows = rows.filter(row => row.exit !== 'hidden');
+  async function archiveThread(card: ThreadCard) {
+    dispatchRows({ type: 'archive', id: card.id });
+    try {
+      await call('archiveThread', { threadId: card.id, stopActive: ['running', 'queued'].includes(card.state) });
+    } catch (e) {
+      dispatchRows({ type: 'restore', id: card.id });
+      error(e);
+    }
+  }
   const threadAction = useRef(false);
-  async function selectThread(card: ThreadCard, archive = false) {
+  async function selectThread(card: ThreadCard) {
     const cm = view.current;
     if (!cm || threadAction.current) return;
     threadAction.current = true;
     try {
-      if (archive) {
-        await call('archiveThread', { threadId: card.id, stopActive: ['running', 'queued'].includes(card.state) });
-        return;
-      }
       const bounds = cm.scrollDOM.getBoundingClientRect();
       const visible = Array.from(cm.contentDOM.querySelectorAll<HTMLElement>('.bubble-block.user')).filter(node => {
         const rect = node.getBoundingClientRect();
@@ -364,7 +371,7 @@ export default function Stream() {
         const { value } = await window.streamAPI!.call('load'); if (disposed) return;
         const snapshot: Snapshot = value.snapshot;
         base.current = snapshot;
-        setCards(value.cards ?? []);
+        dispatchRows({ type: 'sync', cards: value.cards ?? [] });
         const ctx: EditorContext = {
           beats: snapshot.beats, byId: new Map(snapshot.beats.map(b => [b.id, b])), initial: { ids: snapshot.beats.map(b => b.id), nextId: snapshot.nextId, retired: snapshot.retired },
           onChange: changed, onSelection: focus, onScroll, entered, leave, link,
@@ -376,7 +383,7 @@ export default function Stream() {
         requestAnimationFrame(() => goTo(view.current!.state.field(identity).ids.at(-1)!, true, 'start'));
         unsubscribe = window.streamAPI!.onEvent(event => {
           if (event.snapshot) apply(event.snapshot);
-          if (event.event === 'open-threads') setCards(event.cards ?? []);
+          if (event.event === 'open-threads') dispatchRows({ type: 'sync', cards: event.cards ?? [] });
           if (event.event === 'notice') setNotice(event.message || '');
           if (event.event === 'reply-state') void updateReply(event).catch(error);
           if (event.event === 'open-beat' && event.id !== undefined) { goTo(event.id); }
@@ -422,19 +429,22 @@ export default function Stream() {
       void attach([...event.dataTransfer.files]);
     }}>
     <div className="window-drag" aria-hidden="true" />
-    {cards.length > 0 && <nav className="thread-margin" aria-label="Open threads">
-      {cards.map(card => {
+    {visibleRows.length > 0 && <nav className="thread-margin" aria-label="Open threads">
+      {visibleRows.map(({ card, exit }) => {
         const active = ['running', 'queued'].includes(card.state);
         const state = active ? 'working' : card.unread ? 'unread' : card.state;
         const archive = active ? 'stop and archive' : 'archive';
-        return <div className="thread-row" key={card.id} data-state={state}>
+        return <div className="thread-row" key={card.id} data-state={state} data-exit={exit} inert={!!exit}
+          onAnimationEnd={event => {
+            if (event.target === event.currentTarget && event.animationName === 'thread-exit') dispatchRows({ type: 'finish', id: card.id });
+          }}>
           <button className="thread-title" title={card.title + ' · ' + card.action}
             aria-label={card.title + ', ' + (card.unread ? 'unread result' : card.state.replaceAll('_', ' '))} onClick={() => void selectThread(card)}>
             <MarginLabel title={card.title} />
             {(active || card.unread) && <span className="thread-indicator" aria-hidden="true" />}
           </button>
           <button className="archive-thread" title={archive} aria-label={archive + ' ' + card.title}
-            onClick={() => void selectThread(card, true)}>
+            onClick={() => void archiveThread(card)}>
             <span>{archive}</span>
             <svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
               {active ? <rect x="4" y="4" width="8" height="8" rx="1" /> : <path d="M2 3h12v3H2z M3.5 6v7h9V6 M6.5 8.5h3" />}
